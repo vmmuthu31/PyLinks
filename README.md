@@ -1,10 +1,10 @@
-# 🧩 PyLinks - Seamless PYUSD Payment Infrastructure
+# PyLinks - Seamless PYUSD Payment Infrastructure
 
 > **ETHGlobal Online 2025 Hackathon Submission**
 
 PyLinks is a comprehensive payment infrastructure platform that enables merchants and indie developers to easily integrate PayPal's PYUSD stablecoin into their applications, websites, and services. We're making Web3 payments as simple as scanning a QR code.
 
-## 🎯 Problem Statement
+## Problem Statement
 
 Merchants and indie developers face significant barriers when trying to integrate PYUSD payments:
 
