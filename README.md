@@ -61,7 +61,7 @@ PyLinks provides a complete payment infrastructure stack that makes PYUSD integr
 ### 1. **Merchant SDK** (`/sdk`)
 
 ```typescript
-import { PyLinks } from "@pylinks/sdk";
+import { PyLinks } from "pylinks/sdk";
 
 const payment = await PyLinks.createPayment({
   amount: 10,
@@ -231,10 +231,10 @@ cd mobile && npx expo start
 
 ```typescript
 // 1. Install SDK
-npm install @pylinks/sdk
+npm install pylinks/sdk
 
 // 2. Initialize
-import { PyLinks } from '@pylinks/sdk';
+import { PyLinks } from 'pylinks/sdk';
 
 const pylinks = new PyLinks({
   apiKey: 'your_api_key',
