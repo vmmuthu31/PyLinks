@@ -2,6 +2,16 @@
   "name": "smart-contracts",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:sepolia": "hardhat ignition deploy ignition/modules/PyLinksPriceOracle.ts --network sepolia",
+    "deploy:base": "hardhat ignition deploy ignition/modules/PyLinksPriceOracle.ts --network baseSepolia",
+    "deploy:optimism": "hardhat ignition deploy ignition/modules/PyLinksPriceOracle.ts --network optimismSepolia"
+  },
+  "dependencies": {
+    "@pythnetwork/pyth-sdk-solidity": "^3.1.0"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-ignition": "^3.0.3",
     "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.0",

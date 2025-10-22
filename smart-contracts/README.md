@@ -1,57 +1,229 @@
-# Sample Hardhat 3 Beta Project (`mocha` and `ethers`)
+# PyLinks Smart Contracts
 
-This project showcases a Hardhat 3 Beta project using `mocha` for tests and the `ethers` library for Ethereum interactions.
+Smart contracts for advanced PYUSD payment infrastructure on Ethereum/Optimism.
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+## Contracts
 
-## Project Overview
+### 1. PaymentEscrow.sol
 
-This example project includes:
+**Purpose**: Secure escrow for PYUSD payments with buyer protection
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using `mocha` and ethers.js
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+**Features**:
 
-## Usage
+- Hold payments in escrow for a configurable period (default 7 days)
+- Auto-release to merchant after escrow period
+- Buyer-initiated disputes within 14 days
+- Merchant-initiated refunds
+- Secure fund management
 
-### Running Tests
+**Use Cases**:
 
-To run all the tests in the project, execute the following command:
+- Freelance work payments
+- E-commerce with buyer protection
+- Service-based payments
+- High-value transactions
 
-```shell
+**Key Functions**:
+
+```solidity
+createPayment(merchant, amount, sessionId, autoRelease) → paymentId
+releasePayment(paymentId)
+disputePayment(paymentId)
+refundPayment(paymentId)
+withdraw()
+```
+
+### 2. RecurringPayments.sol
+
+**Purpose**: Subscription-based recurring PYUSD payments
+
+**Features**:
+
+- Create subscription plans with custom intervals
+- Automatic payment processing
+- Pause/resume subscriptions
+- Subscriber and merchant management
+- Allowance-based payments
+
+**Use Cases**:
+
+- SaaS subscriptions
+- Monthly memberships
+- Recurring donations
+- Service retainers
+
+**Key Functions**:
+
+```solidity
+createSubscription(merchant, amount, interval, planId) → subscriptionId
+processPayment(subscriptionId)
+cancelSubscription(subscriptionId)
+pauseSubscription(subscriptionId)
+resumeSubscription(subscriptionId)
+```
+
+### 3. PaymentSplitter.sol
+
+**Purpose**: Automatically split payments among multiple recipients
+
+**Features**:
+
+- Define custom split percentages (basis points)
+- Multi-recipient payments in one transaction
+- Revenue sharing automation
+- Configurable split rules
+
+**Use Cases**:
+
+- Team revenue sharing
+- Platform fees + merchant payments
+- Affiliate commission splits
+- Multi-party transactions
+
+**Key Functions**:
+
+```solidity
+createSplit(recipients[], shares[]) → splitId
+executeSplit(splitId, amount)
+deactivateSplit(splitId)
+```
+
+## Deployment
+
+### Prerequisites
+
+```bash
+npm install
+# or
+bun install
+```
+
+### Environment Setup
+
+Create `.env` file:
+
+```bash
+PRIVATE_KEY=your_private_key_here
+INFURA_API_KEY=your_infura_key_here
+ETHERSCAN_API_KEY=your_etherscan_key_here
+```
+
+### Deploy to Sepolia Testnet
+
+```bash
+# Compile contracts
+npx hardhat compile
+
+# Deploy PaymentEscrow
+npx hardhat run scripts/deploy-escrow.ts --network sepolia
+
+# Deploy RecurringPayments
+npx hardhat run scripts/deploy-recurring.ts --network sepolia
+
+# Deploy PaymentSplitter
+npx hardhat run scripts/deploy-splitter.ts --network sepolia
+```
+
+### PYUSD Contract Addresses
+
+- **Sepolia**: `0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9`
+- **Ethereum Mainnet**: `0x6c3ea9036406852006290770BEdfcAbA0e23A0e8`
+
+## Testing
+
+```bash
+# Run all tests
 npx hardhat test
+
+# Run specific test
+npx hardhat test test/PaymentEscrow.test.ts
+
+# Run with coverage
+npx hardhat coverage
 ```
 
-You can also selectively run the Solidity or `mocha` tests:
+## Verification
 
-```shell
-npx hardhat test solidity
-npx hardhat test mocha
+Verify contracts on Etherscan:
+
+```bash
+npx hardhat verify --network sepolia DEPLOYED_CONTRACT_ADDRESS "PYUSD_ADDRESS"
 ```
 
-### Make a deployment to Sepolia
+## Integration with PyLinks Backend
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
+These contracts extend PyLinks functionality:
 
-To run the deployment to a local chain:
+1. **Escrow Integration**: Backend can create escrow payments for high-value transactions
+2. **Subscription Plans**: Recurring payments for SaaS merchants
+3. **Revenue Sharing**: Split payments between platform and merchants
 
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
+### Example Integration
+
+```typescript
+import { ethers } from "ethers";
+
+// Connect to PaymentEscrow
+const escrow = new ethers.Contract(ESCROW_ADDRESS, PaymentEscrowABI, signer);
+
+// Create escrowed payment
+const tx = await escrow.createPayment(
+  merchantAddress,
+  amount,
+  sessionId,
+  true // auto-release
+);
+
+const receipt = await tx.wait();
+const paymentId = receipt.events[0].args.paymentId;
 ```
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
+## Security
 
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
+- All contracts use OpenZeppelin patterns
+- Reentrancy protection
+- Access control modifiers
+- Tested for common vulnerabilities
 
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
+## Gas Optimization
 
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+- Efficient storage patterns
+- Minimal external calls
+- Batch operations where possible
+
+## License
+
+MIT
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Write tests for new functionality
+4. Submit a pull request
+
+## Contract Addresses
+
+Will be updated after deployment:
+
+```
+Sepolia Testnet:
+- PaymentEscrow: TBD
+- RecurringPayments: TBD
+- PaymentSplitter: TBD
+
+Ethereum Mainnet:
+- PaymentEscrow: TBD
+- RecurringPayments: TBD
+- PaymentSplitter: TBD
 ```
 
-After setting the variable, you can run the deployment with the Sepolia network:
+## Audit Status
 
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
-```
+⚠️ **Not audited** - These contracts are for hackathon/demonstration purposes.
+Do not use in production without a professional security audit.
+
+## Support
+
+- GitHub Issues: https://github.com/vmmuthu31/PyLinks/issues
+- Documentation: https://github.com/vmmuthu31/PyLinks
