@@ -1110,7 +1110,7 @@ var PyLinks = class {
   constructor(config) {
     this.apiKey = config.apiKey;
     this.network = config.network || "sepolia";
-    this.baseUrl = config.baseUrl || "http://localhost:8000/api";
+    this.baseUrl = config.baseUrl || "https://pylinks-backend.vercel.app/api";
     this.client = import_axios.default.create({
       baseURL: this.baseUrl,
       headers: {
