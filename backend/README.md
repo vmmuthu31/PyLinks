@@ -132,8 +132,8 @@ backend/
 ### Merchants
 
 - `POST /api/merchants/register` - Register new merchant
-- `GET /api/merchants/profile` - Get merchant profile
-- `POST /api/merchants/rotate-key` - Rotate API key
+- `GET /api/merchants/me` - Get merchant profile
+- `POST /api/merchants/regenerate-keys` - Regenerate API key
 
 ### Payments
 
