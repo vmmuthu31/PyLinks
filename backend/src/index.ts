@@ -17,7 +17,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.get("/health", (req, res) => {
+app.get("/", (_req, res) => {
+  res.json({
+    name: "PyLinks API",
+    version: "1.0.0",
+    description: "PYUSD Payment Infrastructure",
+  });
+});
+
+app.get("/health", (_req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
 });
 
