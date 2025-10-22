@@ -1,9 +1,28 @@
 type PaymentStatusType = "pending" | "paid" | "expired" | "failed";
 type Network = "sepolia" | "mainnet";
 interface PyLinksConfig {
-    apiKey: string;
+    apiKey?: string;
     network?: Network;
     baseUrl?: string;
+}
+interface MerchantRegistration {
+    email: string;
+    name: string;
+    walletAddress: string;
+    webhookUrl?: string;
+}
+interface MerchantProfile {
+    merchantId: string;
+    email: string;
+    name: string;
+    walletAddress: string;
+    webhookUrl?: string;
+    isActive: boolean;
+    createdAt: string;
+}
+interface ApiKeyResponse {
+    apiKey: string;
+    apiSecret: string;
 }
 interface CreatePaymentParams {
     amount: number;
@@ -70,25 +89,46 @@ declare function verifyPayment({ sessionId, recipient, amount, }: {
 declare function generateQRCodePayload(payload: any): Promise<string>;
 
 declare class PyLinks {
-    private apiKey;
+    private apiKey?;
     private network;
     private baseUrl;
     private client;
     constructor(config: PyLinksConfig);
     /**
-     * Create a new payment session
+     * Set API key after initialization
+     */
+    setApiKey(apiKey: string): void;
+    /**
+     * Register a new merchant (Step 1)
+     */
+    registerMerchant(params: MerchantRegistration): Promise<{
+        merchantId: string;
+        email: string;
+        name: string;
+        walletAddress: string;
+    }>;
+    /**
+     * Create API key for registered merchant (Step 2)
+     */
+    createApiKey(merchantId: string): Promise<ApiKeyResponse>;
+    /**
+     * Get merchant profile (requires API key)
+     */
+    getMerchantProfile(): Promise<MerchantProfile>;
+    /**
+     * Create a new payment session (requires API key)
      */
     createPayment(params: CreatePaymentParams): Promise<PaymentSession>;
     /**
-     * Get payment session status
+     * Get payment session status (requires API key)
      */
     getPaymentStatus(sessionId: string): Promise<PaymentStatus>;
     /**
-     * Verify payment manually
+     * Verify payment manually (requires API key)
      */
     verifyPayment(sessionId: string): Promise<PaymentStatus>;
     /**
-     * List all payment sessions
+     * List all payment sessions (requires API key)
      */
     listPayments(filters?: {
         status?: string;
@@ -97,4 +137,4 @@ declare class PyLinks {
     }): Promise<PaymentSession[]>;
 }
 
-export { type ApiResponse, type CreatePaymentParams, type Network, type PaymentSession, type PaymentStatus, type PaymentStatusType, PyLinks, type PyLinksConfig, type VerifyPaymentParams, type VerifyPaymentResult, PyLinks as default, generateQRCodePayload, verifyPayment };
+export { type ApiKeyResponse, type ApiResponse, type CreatePaymentParams, type MerchantProfile, type MerchantRegistration, type Network, type PaymentSession, type PaymentStatus, type PaymentStatusType, PyLinks, type PyLinksConfig, type VerifyPaymentParams, type VerifyPaymentResult, PyLinks as default, generateQRCodePayload, verifyPayment };
