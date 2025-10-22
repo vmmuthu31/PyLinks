@@ -61,7 +61,7 @@ bun run start
 ### 1. Register a Merchant
 
 ```bash
-curl -X POST http://localhost:3000/api/merchants/register \
+curl -X POST https://pylinks-backend.vercel.app/api/merchants/register \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Test Store",
@@ -76,8 +76,8 @@ Save the `apiKey` from the response!
 ### 2. Create a Payment
 
 ```bash
-curl -X POST http://localhost:3000/api/payments/create \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -X POST https://pylinks-backend.vercel.app/api/payments/create \
+  -H "x-api-key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "amount": 10.50,
@@ -89,7 +89,8 @@ curl -X POST http://localhost:3000/api/payments/create \
 ### 3. Check Payment Status
 
 ```bash
-curl http://localhost:3000/api/payments/SESSION_ID
+curl https://pylinks-backend.vercel.app/api/payments/SESSION_ID \
+  -H "x-api-key: YOUR_API_KEY"
 ```
 
 ## Project Structure

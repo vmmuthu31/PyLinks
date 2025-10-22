@@ -203,7 +203,7 @@ DATABASE_URL=your_database_url
 JWT_SECRET=your_jwt_secret
 
 # Mobile (.env)
-EXPO_PUBLIC_API_URL=http://localhost:3000
+EXPO_PUBLIC_API_URL=https://pylinks-backend.vercel.app
 ```
 
 4. **Run development servers**
