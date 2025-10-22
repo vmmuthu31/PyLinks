@@ -32,8 +32,13 @@ export async function verifyPayment({
       event.args.value.toString() ===
         ethers.utils.parseUnits(amount.toString(), 6).toString()
     ) {
-      return { status: "paid", txHash: event.transactionHash };
+      return {
+        status: "paid",
+        txHash: event.transactionHash,
+        sessionId,
+        timestamp: event.blockNumber,
+      };
     }
   }
-  return { status: "pending" };
+  return { status: "pending", sessionId };
 }
