@@ -32,7 +32,6 @@ const merchantSchema = new Schema<IMerchant>(
       type: String,
       required: true,
       unique: true,
-      index: true,
     },
     apiSecret: {
       type: String,
