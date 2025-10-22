@@ -3,9 +3,31 @@ export type PaymentStatusType = "pending" | "paid" | "expired" | "failed";
 export type Network = "sepolia" | "mainnet";
 
 export interface PyLinksConfig {
-  apiKey: string;
+  apiKey?: string;
   network?: Network;
   baseUrl?: string;
+}
+
+export interface MerchantRegistration {
+  email: string;
+  name: string;
+  walletAddress: string;
+  webhookUrl?: string;
+}
+
+export interface MerchantProfile {
+  merchantId: string;
+  email: string;
+  name: string;
+  walletAddress: string;
+  webhookUrl?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ApiKeyResponse {
+  apiKey: string;
+  apiSecret: string;
 }
 
 export interface CreatePaymentParams {

@@ -5,6 +5,9 @@ import type {
   PaymentSession,
   PaymentStatus,
   ApiResponse,
+  MerchantRegistration,
+  MerchantProfile,
+  ApiKeyResponse,
 } from "./types";
 
 export * from "./types";
@@ -12,7 +15,7 @@ export * from "./pyusd";
 export * from "./qr";
 
 export class PyLinks {
-  private apiKey: string;
+  private apiKey?: string;
   private network: "sepolia" | "mainnet";
   private baseUrl: string;
   private client: AxiosInstance;
@@ -25,16 +28,104 @@ export class PyLinks {
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
       },
     });
+
+    if (this.apiKey) {
+      this.client.defaults.headers.common["x-api-key"] = this.apiKey;
+    }
   }
 
   /**
-   * Create a new payment session
+   * Set API key after initialization
+   */
+  setApiKey(apiKey: string): void {
+    this.apiKey = apiKey;
+    this.client.defaults.headers.common["x-api-key"] = apiKey;
+  }
+
+  /**
+   * Register a new merchant (Step 1)
+   */
+  async registerMerchant(params: MerchantRegistration): Promise<{
+    merchantId: string;
+    email: string;
+    name: string;
+    walletAddress: string;
+  }> {
+    const response = await this.client.post<
+      ApiResponse<{
+        merchantId: string;
+        email: string;
+        name: string;
+        walletAddress: string;
+      }>
+    >("/merchants/register", params);
+
+    if (!response.data.success || !response.data.data) {
+      throw new Error(
+        response.data.error?.message || "Failed to register merchant"
+      );
+    }
+
+    return response.data.data;
+  }
+
+  /**
+   * Create API key for registered merchant (Step 2)
+   */
+  async createApiKey(merchantId: string): Promise<ApiKeyResponse> {
+    const response = await this.client.post<ApiResponse<ApiKeyResponse>>(
+      "/merchants/create-api-key",
+      { merchantId }
+    );
+
+    if (!response.data.success || !response.data.data) {
+      throw new Error(
+        response.data.error?.message || "Failed to create API key"
+      );
+    }
+
+    const { apiKey } = response.data.data;
+    this.setApiKey(apiKey);
+
+    return response.data.data;
+  }
+
+  /**
+   * Get merchant profile (requires API key)
+   */
+  async getMerchantProfile(): Promise<MerchantProfile> {
+    if (!this.apiKey) {
+      throw new Error(
+        "API key is required. Call setApiKey() or createApiKey() first."
+      );
+    }
+
+    const response = await this.client.get<ApiResponse<MerchantProfile>>(
+      "/merchants/profile"
+    );
+
+    if (!response.data.success || !response.data.data) {
+      throw new Error(
+        response.data.error?.message || "Failed to get merchant profile"
+      );
+    }
+
+    return response.data.data;
+  }
+
+  /**
+   * Create a new payment session (requires API key)
    */
   async createPayment(params: CreatePaymentParams): Promise<PaymentSession> {
+    if (!this.apiKey) {
+      throw new Error(
+        "API key is required. Call setApiKey() or createApiKey() first."
+      );
+    }
+
     const response = await this.client.post<ApiResponse<PaymentSession>>(
       "/payments/create",
       params
@@ -50,9 +141,15 @@ export class PyLinks {
   }
 
   /**
-   * Get payment session status
+   * Get payment session status (requires API key)
    */
   async getPaymentStatus(sessionId: string): Promise<PaymentStatus> {
+    if (!this.apiKey) {
+      throw new Error(
+        "API key is required. Call setApiKey() or createApiKey() first."
+      );
+    }
+
     const response = await this.client.get<ApiResponse<PaymentStatus>>(
       `/payments/${sessionId}`
     );
@@ -67,9 +164,15 @@ export class PyLinks {
   }
 
   /**
-   * Verify payment manually
+   * Verify payment manually (requires API key)
    */
   async verifyPayment(sessionId: string): Promise<PaymentStatus> {
+    if (!this.apiKey) {
+      throw new Error(
+        "API key is required. Call setApiKey() or createApiKey() first."
+      );
+    }
+
     const response = await this.client.post<ApiResponse<PaymentStatus>>(
       `/payments/${sessionId}/verify`
     );
@@ -84,13 +187,18 @@ export class PyLinks {
   }
 
   /**
-   * List all payment sessions
+   * List all payment sessions (requires API key)
    */
   async listPayments(filters?: {
     status?: string;
     limit?: number;
     offset?: number;
   }): Promise<PaymentSession[]> {
+    if (!this.apiKey) {
+      throw new Error(
+        "API key is required. Call setApiKey() or createApiKey() first."
+      );
+    }
     const params = new URLSearchParams();
     if (filters?.status) params.append("status", filters.status);
     if (filters?.limit) params.append("limit", filters.limit.toString());
