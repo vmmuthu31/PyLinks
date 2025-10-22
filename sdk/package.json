@@ -1,6 +1,6 @@
 {
-  "name": "@pylinks/sdk",
-  "version": "1.0.0",
+  "name": "pylinks-sdk",
+  "version": "1.0.1",
   "description": "PyLinks SDK - Seamless PYUSD payment integration for merchants",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

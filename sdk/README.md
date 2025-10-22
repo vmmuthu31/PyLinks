@@ -1,8 +1,8 @@
-# @pylinks/sdk
+# pylinks/sdk
 
 > Official TypeScript/JavaScript SDK for integrating PYUSD payments via PyLinks
 
-[![NPM Version](https://img.shields.io/npm/v/@pylinks/sdk)](https://www.npmjs.com/package/@pylinks/sdk)
+[![NPM Version](https://img.shields.io/npm/v/pylinks/sdk)](https://www.npmjs.com/package/pylinks/sdk)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Features
@@ -18,11 +18,11 @@
 ## Installation
 
 ```bash
-npm install @pylinks/sdk
+npm install pylinks/sdk
 # or
-yarn add @pylinks/sdk
+yarn add pylinks/sdk
 # or
-bun add @pylinks/sdk
+bun add pylinks/sdk
 ```
 
 ## Quick Start
@@ -34,7 +34,7 @@ Register at [PyLinks Dashboard](https://dashboard.pylinks.app) to get your API k
 ### 2. Initialize the SDK
 
 ```typescript
-import { PyLinks } from "@pylinks/sdk";
+import { PyLinks } from "pylinks/sdk";
 
 const pylinks = new PyLinks({
   apiKey: "pk_your_api_key_here",
@@ -164,7 +164,7 @@ const payments = await pylinks.listPayments({
 ### React Example
 
 ```tsx
-import { PyLinks } from "@pylinks/sdk";
+import { PyLinks } from "pylinks/sdk";
 import { useState } from "react";
 
 function CheckoutButton() {
@@ -202,7 +202,7 @@ function CheckoutButton() {
 
 ```typescript
 import express from "express";
-import { PyLinks } from "@pylinks/sdk";
+import { PyLinks } from "pylinks/sdk";
 
 const app = express();
 const pylinks = new PyLinks({
@@ -237,7 +237,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
 ```typescript
 // pages/api/payment.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { PyLinks } from "@pylinks/sdk";
+import { PyLinks } from "pylinks/sdk";
 
 const pylinks = new PyLinks({
   apiKey: process.env.PYLINKS_API_KEY!,
@@ -270,7 +270,7 @@ export default async function handler(
 The SDK includes direct blockchain verification utilities:
 
 ```typescript
-import { verifyPayment } from "@pylinks/sdk";
+import { verifyPayment } from "pylinks/sdk";
 
 const result = await verifyPayment({
   sessionId: "session_123",
@@ -288,7 +288,7 @@ if (result.status === "paid") {
 Generate QR codes for payments:
 
 ```typescript
-import { generateQRCodePayload } from "@pylinks/sdk";
+import { generateQRCodePayload } from "pylinks/sdk";
 
 const qrDataUrl = await generateQRCodePayload({
   sessionId: "session_123",
@@ -303,7 +303,7 @@ const qrDataUrl = await generateQRCodePayload({
 ## Error Handling
 
 ```typescript
-import { PyLinks } from "@pylinks/sdk";
+import { PyLinks } from "pylinks/sdk";
 
 const pylinks = new PyLinks({ apiKey: "pk_..." });
 
@@ -332,7 +332,7 @@ import type {
   PaymentSession,
   PaymentStatus,
   CreatePaymentParams,
-} from "@pylinks/sdk";
+} from "pylinks/sdk";
 ```
 
 ## Environment Variables
@@ -346,7 +346,7 @@ PYLINKS_NETWORK=sepolia
 ```
 
 ```typescript
-import { PyLinks } from "@pylinks/sdk";
+import { PyLinks } from "pylinks/sdk";
 
 const pylinks = new PyLinks({
   apiKey: process.env.PYLINKS_API_KEY!,
