@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
+import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
+
 interface IPYUSD {
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
     function allowance(address owner, address spender) external view returns (uint256);
@@ -8,23 +11,27 @@ interface IPYUSD {
 
 /**
  * @title RecurringPayments
- * @notice Manage subscription-based PYUSD payments
- * @dev Allows merchants to charge customers on a recurring basis
+ * @notice Manage subscription-based PYUSD payments with USD pricing via Pyth oracles
+ * @dev Allows merchants to charge customers in USD, converted to PYUSD at current rates
  */
 contract RecurringPayments {
     IPYUSD public immutable pyusd;
+    IPyth public immutable pyth;
+    
+    bytes32 public constant PYUSD_USD_PRICE_ID = 0x8b820e7f3c3dc16bf617c6929945a48d3b6ea9e8b9e6fc2e1e1f3f3b3e3c3e3d;
     
     enum SubscriptionStatus { Active, Paused, Cancelled }
     
     struct Subscription {
         address subscriber;
         address merchant;
-        uint256 amount;
+        uint256 usdAmount; // Amount in USD (8 decimals)
         uint256 interval; // in seconds
         uint256 nextPaymentDue;
         uint256 startedAt;
         SubscriptionStatus status;
         string planId;
+        bool useUsdPricing; // Whether to use dynamic USD pricing
     }
     
     mapping(bytes32 => Subscription) public subscriptions;
@@ -35,47 +42,53 @@ contract RecurringPayments {
         bytes32 indexed subscriptionId,
         address indexed subscriber,
         address indexed merchant,
-        uint256 amount,
+        uint256 usdAmount,
         uint256 interval,
-        string planId
+        string planId,
+        bool useUsdPricing
     );
     
     event PaymentProcessed(
         bytes32 indexed subscriptionId,
-        uint256 amount,
-        uint256 nextPaymentDue
+        uint256 pyusdAmount,
+        uint256 nextPaymentDue,
+        int64 price
     );
     
     event SubscriptionCancelled(bytes32 indexed subscriptionId);
     event SubscriptionPaused(bytes32 indexed subscriptionId);
     event SubscriptionResumed(bytes32 indexed subscriptionId);
     
-    constructor(address _pyusd) {
+    constructor(address _pyusd, address _pyth) {
         require(_pyusd != address(0), "Invalid PYUSD address");
+        require(_pyth != address(0), "Invalid Pyth address");
         pyusd = IPYUSD(_pyusd);
+        pyth = IPyth(_pyth);
     }
     
     /**
-     * @notice Create a new subscription
+     * @notice Create a new subscription with USD pricing
      * @param merchant Merchant address
-     * @param amount Payment amount per interval
+     * @param usdAmount Payment amount in USD (8 decimals)
      * @param interval Payment interval in seconds
      * @param planId Plan identifier
+     * @param useUsdPricing Whether to use dynamic USD pricing via Pyth
      */
     function createSubscription(
         address merchant,
-        uint256 amount,
+        uint256 usdAmount,
         uint256 interval,
-        string memory planId
+        string memory planId,
+        bool useUsdPricing
     ) external returns (bytes32) {
         require(merchant != address(0), "Invalid merchant");
-        require(amount > 0, "Amount must be > 0");
+        require(usdAmount > 0, "Amount must be > 0");
         require(interval > 0, "Interval must be > 0");
         
         bytes32 subscriptionId = keccak256(abi.encodePacked(
             msg.sender,
             merchant,
-            amount,
+            usdAmount,
             interval,
             planId,
             block.timestamp
@@ -86,12 +99,13 @@ contract RecurringPayments {
         subscriptions[subscriptionId] = Subscription({
             subscriber: msg.sender,
             merchant: merchant,
-            amount: amount,
+            usdAmount: usdAmount,
             interval: interval,
             nextPaymentDue: block.timestamp + interval,
             startedAt: block.timestamp,
             status: SubscriptionStatus.Active,
-            planId: planId
+            planId: planId,
+            useUsdPricing: useUsdPricing
         });
         
         merchantSubscriptions[merchant].push(subscriptionId);
@@ -101,19 +115,24 @@ contract RecurringPayments {
             subscriptionId,
             msg.sender,
             merchant,
-            amount,
+            usdAmount,
             interval,
-            planId
+            planId,
+            useUsdPricing
         );
         
         return subscriptionId;
     }
     
     /**
-     * @notice Process a subscription payment
+     * @notice Process a subscription payment with dynamic pricing
      * @param subscriptionId Subscription identifier
+     * @param priceUpdateData Price update data from Pyth (only needed if useUsdPricing is true)
      */
-    function processPayment(bytes32 subscriptionId) external {
+    function processPayment(
+        bytes32 subscriptionId,
+        bytes[] calldata priceUpdateData
+    ) external payable {
         Subscription storage sub = subscriptions[subscriptionId];
         
         require(sub.status == SubscriptionStatus.Active, "Subscription not active");
@@ -123,20 +142,42 @@ contract RecurringPayments {
             "Not authorized"
         );
         
+        uint256 pyusdAmount;
+        int64 currentPrice = 0;
+        
+        if (sub.useUsdPricing) {
+            // Update price feeds with fresh data
+            uint256 updateFee = pyth.getUpdateFee(priceUpdateData);
+            require(msg.value >= updateFee, "Insufficient fee for price update");
+            
+            pyth.updatePriceFeeds{value: updateFee}(priceUpdateData);
+            
+            // Get current PYUSD/USD price
+            PythStructs.Price memory price = pyth.getPriceUnsafe(PYUSD_USD_PRICE_ID);
+            require(price.price > 0, "Invalid price");
+            currentPrice = price.price;
+            
+            // Calculate PYUSD amount from USD
+            pyusdAmount = (sub.usdAmount * 1e8) / uint256(int256(price.price));
+        } else {
+            // Fixed PYUSD amount (no dynamic pricing)
+            pyusdAmount = sub.usdAmount; // In this case, usdAmount is actually PYUSD amount
+        }
+        
         // Check allowance
         uint256 allowance = pyusd.allowance(sub.subscriber, address(this));
-        require(allowance >= sub.amount, "Insufficient allowance");
+        require(allowance >= pyusdAmount, "Insufficient allowance");
         
         // Process payment
         require(
-            pyusd.transferFrom(sub.subscriber, sub.merchant, sub.amount),
+            pyusd.transferFrom(sub.subscriber, sub.merchant, pyusdAmount),
             "Transfer failed"
         );
         
         // Update next payment due
         sub.nextPaymentDue = block.timestamp + sub.interval;
         
-        emit PaymentProcessed(subscriptionId, sub.amount, sub.nextPaymentDue);
+        emit PaymentProcessed(subscriptionId, pyusdAmount, sub.nextPaymentDue, currentPrice);
     }
     
     /**

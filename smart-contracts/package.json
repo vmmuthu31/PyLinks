@@ -5,9 +5,7 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
-    "deploy:sepolia": "hardhat ignition deploy ignition/modules/PyLinksPriceOracle.ts --network sepolia",
-    "deploy:base": "hardhat ignition deploy ignition/modules/PyLinksPriceOracle.ts --network baseSepolia",
-    "deploy:optimism": "hardhat ignition deploy ignition/modules/PyLinksPriceOracle.ts --network optimismSepolia"
+    "deploy:all:sepolia": "hardhat ignition deploy ignition/modules/PyLinks.ts --network sepolia"
   },
   "dependencies": {
     "@pythnetwork/pyth-sdk-solidity": "^3.1.0"
