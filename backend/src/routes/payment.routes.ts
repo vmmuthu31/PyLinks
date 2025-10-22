@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { PaymentSessionService } from "../services/payment-session.service";
 import { authenticateApiKey } from "../middleware/auth";
-import { validateRequest } from "../middleware/validation";
 
 const router = Router();
 
@@ -26,7 +25,7 @@ router.post("/create", authenticateApiKey, async (req, res, next) => {
       metadata,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: session,
     });
@@ -49,7 +48,7 @@ router.get("/:sessionId", async (req, res, next) => {
       return res.status(404).json({ error: "Payment session not found" });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         sessionId: session.sessionId,
@@ -79,7 +78,7 @@ router.post("/:sessionId/verify", async (req, res, next) => {
 
     const result = await PaymentSessionService.verifySessionPayment(sessionId);
 
-    res.json({
+    return res.json({
       success: true,
       data: result,
     });
@@ -105,7 +104,7 @@ router.get("/merchant/sessions", authenticateApiKey, async (req, res, next) => {
       }
     );
 
-    res.json({
+    return res.json({
       success: true,
       count: sessions.length,
       data: sessions,

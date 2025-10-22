@@ -30,12 +30,11 @@ const merchantSchema = new Schema<IMerchant>(
     },
     apiKey: {
       type: String,
-      required: true,
-      unique: true,
+      sparse: true,
     },
     apiSecret: {
       type: String,
-      required: true,
+      sparse: true,
     },
     webhookUrl: {
       type: String,
@@ -47,7 +46,6 @@ const merchantSchema = new Schema<IMerchant>(
     walletAddress: {
       type: String,
       required: true,
-      unique: true,
     },
     isActive: {
       type: Boolean,
@@ -63,7 +61,8 @@ const merchantSchema = new Schema<IMerchant>(
   }
 );
 
-merchantSchema.index({ apiKey: 1 });
-merchantSchema.index({ walletAddress: 1 });
+merchantSchema.index({ apiKey: 1 }, { unique: true, sparse: true });
+merchantSchema.index({ walletAddress: 1 }, { unique: true });
+merchantSchema.index({ email: 1 }, { unique: true });
 
 export const Merchant = mongoose.model<IMerchant>("Merchant", merchantSchema);

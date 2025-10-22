@@ -27,7 +27,7 @@ router.post("/retry/:sessionId", authenticateApiKey, async (req, res, next) => {
       session.status === "paid" ? "payment.paid" : "payment.expired";
     await WebhookService.triggerPaymentWebhook(session, event);
 
-    res.json({
+    return res.json({
       success: true,
       message: "Webhook retry initiated",
     });
@@ -65,7 +65,7 @@ router.post("/test", authenticateApiKey, async (req, res, next) => {
 
     const delivered = await WebhookService.sendWebhook(merchant, testPayload);
 
-    res.json({
+    return res.json({
       success: delivered,
       message: delivered ? "Test webhook delivered" : "Test webhook failed",
     });
@@ -88,7 +88,7 @@ router.get("/failed", authenticateApiKey, async (req, res, next) => {
       webhookAttempts: { $gt: 0 },
     }).sort({ updatedAt: -1 });
 
-    res.json({
+    return res.json({
       success: true,
       count: failedSessions.length,
       data: failedSessions,

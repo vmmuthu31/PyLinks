@@ -6,7 +6,7 @@ import {
   IPaymentSession,
 } from "../models/PaymentSession";
 import { Merchant } from "../models/Merchant";
-import { verifyPayment } from "pylinks/sdk";
+import { verifyPayment } from "pylinks-sdk";
 
 export interface CreatePaymentSessionDto {
   merchantId: string;
