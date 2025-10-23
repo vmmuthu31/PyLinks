@@ -143,4 +143,41 @@ router.post("/regenerate-keys", authenticateApiKey, async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/merchants/:id
+ * Public - fetch merchant by id (used by dashboards/QR generators)
+ */
+router.get("/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: "Merchant id is required" });
+    }
+
+    const merchant = await Merchant.findById(id).select(
+      "_id email name walletAddress webhookUrl isActive createdAt"
+    );
+
+    if (!merchant) {
+      return res.status(404).json({ error: "Merchant not found" });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        merchantId: merchant._id,
+        email: merchant.email,
+        name: merchant.name,
+        walletAddress: merchant.walletAddress,
+        webhookUrl: merchant.webhookUrl,
+        isActive: merchant.isActive,
+        createdAt: merchant.createdAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

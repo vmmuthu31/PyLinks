@@ -73,6 +73,14 @@ curl -X POST https://pylinks-backend.vercel.app/api/merchants/register \
 
 Save the `apiKey` from the response!
 
+### Fetch merchant by ID (public)
+
+After registering a merchant you'll receive a `merchantId` in the response. Use that to fetch the public profile:
+
+```bash
+curl https://pylinks-backend.vercel.app/api/merchants/<merchantId>
+```
+
 ### 2. Create a Payment
 
 ```bash
@@ -160,6 +168,7 @@ backend/
 - `POST /api/merchants/register` - Register new merchant
 - `GET /api/merchants/me` - Get merchant profile
 - `POST /api/merchants/regenerate-keys` - Regenerate API key
+ - `GET /api/merchants/:id` - Get public merchant profile by ID
 
 ### Payments
 
