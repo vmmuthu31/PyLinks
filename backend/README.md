@@ -93,6 +93,32 @@ curl https://pylinks-backend.vercel.app/api/payments/SESSION_ID \
   -H "x-api-key: YOUR_API_KEY"
 ```
 
+### 4. Record On-Chain Payment
+
+After a payment is completed on-chain, record it for tracking:
+
+```bash
+curl -X POST https://pylinks-backend.vercel.app/api/payments/record \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "txHash": "0x4f82...3d2c",
+    "amount": "25.00",
+    "userWallet": "0x92f47Fbb3D7aD2233bA731FEC2bA2c63F25e79C1",
+    "memo": "Order #4531",
+    "status": "success"
+  }'
+```
+
+### 5. Get Recorded Payments
+
+View all recorded payments for your merchant account:
+
+```bash
+curl https://pylinks-backend.vercel.app/api/payments/records \
+  -H "x-api-key: YOUR_API_KEY"
+```
+
 ## Project Structure
 
 ```
