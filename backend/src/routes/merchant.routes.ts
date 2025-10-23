@@ -40,10 +40,13 @@ router.post("/register", async (req, res, next) => {
       webhookSecret,
     });
 
+    console.log("Merchant created:", merchant._id); // For testing QR codes
+
     res.status(201).json({
       success: true,
       data: {
-        merchantId: merchant._id,
+        _id: merchant._id,
+        merchantId: merchant._id, // Keep both for backward compatibility
         email: merchant.email,
         name: merchant.name,
         walletAddress: merchant.walletAddress,
@@ -53,6 +56,61 @@ router.post("/register", async (req, res, next) => {
       },
       message:
         "Merchant registered successfully. Please save your API credentials securely.",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/merchants/login
+ * Login existing merchant to retrieve API credentials
+ */
+router.post("/login", async (req, res, next) => {
+  try {
+    const { email, walletAddress } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required",
+      });
+    }
+
+    // Find merchant by email
+    const merchant = await Merchant.findOne({ email });
+    if (!merchant) {
+      return res.status(404).json({
+        error: "Merchant not found. Please register first.",
+      });
+    }
+
+    // Optional: Verify wallet address if provided (extra security)
+    if (
+      walletAddress &&
+      merchant.walletAddress !== walletAddress.toLowerCase()
+    ) {
+      return res.status(401).json({
+        error: "Wallet address does not match registered merchant",
+      });
+    }
+
+    console.log("Merchant login:", merchant._id, merchant.email);
+
+    res.json({
+      success: true,
+      data: {
+        _id: merchant._id,
+        merchantId: merchant._id,
+        email: merchant.email,
+        name: merchant.name,
+        walletAddress: merchant.walletAddress,
+        apiKey: merchant.apiKey,
+        apiSecret: merchant.apiSecret,
+        webhookSecret: merchant.webhookSecret,
+        isActive: merchant.isActive,
+        createdAt: merchant.createdAt,
+      },
+      message: "Login successful. Please save your API credentials securely.",
     });
   } catch (error) {
     next(error);
@@ -70,7 +128,8 @@ router.get("/me", authenticateApiKey, async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        merchantId: merchant._id,
+        _id: merchant._id,
+        merchantId: merchant._id, // Keep both for backward compatibility
         email: merchant.email,
         name: merchant.name,
         walletAddress: merchant.walletAddress,
@@ -166,7 +225,8 @@ router.get("/:id", async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        merchantId: merchant._id,
+        _id: merchant._id,
+        merchantId: merchant._id, // Keep both for backward compatibility
         email: merchant.email,
         name: merchant.name,
         walletAddress: merchant.walletAddress,

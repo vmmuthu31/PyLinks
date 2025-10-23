@@ -81,7 +81,20 @@ After registering a merchant you'll receive a `merchantId` in the response. Use 
 curl https://pylinks-backend.vercel.app/api/merchants/<merchantId>
 ```
 
-### 2. Create a Payment
+### 2. Login Existing Merchant
+
+```bash
+curl -X POST https://pylinks-backend.vercel.app/api/merchants/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "merchant@example.com",
+    "walletAddress": "0x742d35Cc641C5cE83c48B4B8C8b43c54f86a9C8B"
+  }'
+```
+
+**Note**: `walletAddress` is optional but adds extra security verification.
+
+### 3. Create a Payment
 
 ```bash
 curl -X POST https://pylinks-backend.vercel.app/api/payments/create \
@@ -94,7 +107,7 @@ curl -X POST https://pylinks-backend.vercel.app/api/payments/create \
   }'
 ```
 
-### 3. Check Payment Status
+### 4. Check Payment Status
 
 ```bash
 curl https://pylinks-backend.vercel.app/api/payments/SESSION_ID \
@@ -168,7 +181,7 @@ backend/
 - `POST /api/merchants/register` - Register new merchant
 - `GET /api/merchants/me` - Get merchant profile
 - `POST /api/merchants/regenerate-keys` - Regenerate API key
- - `GET /api/merchants/:id` - Get public merchant profile by ID
+- `GET /api/merchants/:id` - Get public merchant profile by ID
 
 ### Payments
 
