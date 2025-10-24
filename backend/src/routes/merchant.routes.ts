@@ -240,4 +240,25 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
+router.put("/update-wallet", authenticateApiKey, async (req, res, next) => {
+  try {
+    const { walletAddress } = req.body;
+    const merchant = (req as any).merchant;
+
+    if (!walletAddress)
+      return res.status(400).json({ error: "Wallet address required" });
+
+    merchant.walletAddress = walletAddress.toLowerCase();
+    await merchant.save();
+
+    res.json({
+      success: true,
+      message: "Wallet updated successfully",
+      data: { walletAddress: merchant.walletAddress },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
