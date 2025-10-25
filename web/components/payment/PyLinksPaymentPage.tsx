@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PyLinksCoreService, PaymentDetails, CONTRACTS } from "@/lib/contracts/pylinks-core";
+import { openTransaction } from "@/lib/utils/blockscout";
 
 const PYUSD_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)",
@@ -36,7 +37,6 @@ export default function PyLinksPaymentPage() {
   const router = useRouter();
   const { ready, authenticated, user, login, linkWallet } = usePrivy();
   
-  const [pyLinksService, setPyLinksService] = useState<PyLinksCoreService | null>(null);
   const [loading, setLoading] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -44,23 +44,56 @@ export default function PyLinksPaymentPage() {
   const [timeRemaining, setTimeRemaining] = useState<string>("");
   const [pyusdBalance, setPyusdBalance] = useState<string>("0");
   const [pyusdAllowance, setPyusdAllowance] = useState<string>("0");
+  const [sessionLoading, setSessionLoading] = useState(true);
 
-  // URL parameters
-  const sessionId = searchParams.get("session");
-  const amount = searchParams.get("amount");
-  const description = searchParams.get("description");
-  const merchantId = searchParams.get("merchantId");
-
+  // URL parameters - for contract-based payments, we expect paymentId
+  const paymentId = searchParams.get("paymentId") || searchParams.get("session");
+  
   useEffect(() => {
-    if (ready && user?.wallet?.address && window.ethereum) {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const service = new PyLinksCoreService(signer);
-      setPyLinksService(service);
-      loadPaymentData(service);
-      loadUserBalances();
+    if (ready && paymentId) {
+      initializePayment();
     }
-  }, [ready, user, sessionId]);
+  }, [ready, paymentId]);
+
+  const initializePayment = async () => {
+    try {
+      setSessionLoading(true);
+      
+      // Initialize service with read-only provider
+      const provider = new ethers.providers.JsonRpcProvider(
+        "https://ethereum-sepolia-rpc.publicnode.com"
+      );
+      const service = new PyLinksCoreService(provider);
+      
+      // Try to parse paymentId as number, if it fails, it might be a session ID
+      let actualPaymentId: number;
+      if (paymentId?.startsWith('payment_')) {
+        // For now, we'll use a mock payment ID - in production you'd need a mapping
+        actualPaymentId = 1; // This should be retrieved from your backend or events
+        toast.info("Using demo payment ID for session-based link");
+      } else {
+        actualPaymentId = parseInt(paymentId || "1");
+      }
+      
+      // Load payment from contract
+      const payment = await service.getPayment(actualPaymentId);
+      if (payment) {
+        setPaymentDetails(payment);
+      } else {
+        toast.error('Payment not found in contract');
+      }
+      
+      // Load user balances if wallet connected
+      if (user?.wallet?.address) {
+        await loadUserBalances();
+      }
+    } catch (error) {
+      console.error("Error initializing payment:", error);
+      toast.error("Failed to load payment details");
+    } finally {
+      setSessionLoading(false);
+    }
+  };
 
   // Timer for payment expiry
   useEffect(() => {
@@ -78,40 +111,13 @@ export default function PyLinksPaymentPage() {
     return () => clearInterval(timer);
   }, [paymentDetails]);
 
-  const loadPaymentData = async (service: PyLinksCoreService) => {
-    if (!sessionId) return;
-
-    try {
-      // In a real implementation, you'd need to find the payment ID by session ID
-      // For now, we'll use the session ID as a mock payment ID
-      // This would require adding a mapping function to the contract or using events
-      
-      // Mock payment data based on URL parameters
-      if (amount && description) {
-        const mockPayment: PaymentDetails = {
-          id: 1,
-          merchant: merchantId || "0x742d35Cc6634C0532925a3b8D9C9C0532925a3b8",
-          customer: "0x0000000000000000000000000000000000000000",
-          amount: amount,
-          sessionId: sessionId,
-          status: 0, // Created
-          paymentType: 0, // Regular
-          createdAt: Math.floor(Date.now() / 1000),
-          expiresAt: Math.floor(Date.now() / 1000) + 600, // 10 minutes
-        };
-        setPaymentDetails(mockPayment);
-      }
-    } catch (error) {
-      console.error("Error loading payment data:", error);
-      toast.error("Failed to load payment details");
-    }
-  };
-
   const loadUserBalances = async () => {
-    if (!user?.wallet?.address || !window.ethereum) return;
+    if (!user?.wallet?.address) return;
 
     try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const provider = new ethers.providers.JsonRpcProvider(
+        "https://ethereum-sepolia-rpc.publicnode.com"
+      );
       const pyusdContract = new ethers.Contract(CONTRACTS.PYUSD, PYUSD_ABI, provider);
       
       const balance = await pyusdContract.balanceOf(user.wallet.address);
@@ -140,39 +146,55 @@ export default function PyLinksPaymentPage() {
   };
 
   const approvePayment = async () => {
-    if (!user?.wallet?.address || !amount || !window.ethereum) return;
+    if (!user?.wallet?.address || !paymentDetails) return;
 
     try {
       setLoading(true);
+      
+      if (!window.ethereum) {
+        throw new Error("No wallet provider found. Please install MetaMask.");
+      }
+      
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
       const pyusdContract = new ethers.Contract(CONTRACTS.PYUSD, PYUSD_ABI, signer);
       
-      const amountWei = ethers.utils.parseUnits(amount, 6);
+      const amountWei = ethers.utils.parseUnits(paymentDetails.amount, 6);
       
       toast.success("Approving PYUSD spending...");
-      const approveTx = await pyusdContract.approve(CONTRACTS.PYLINKS_CORE, amountWei);
-      await approveTx.wait();
+      
+      // Use Web3Provider directly for approval
+      const tx = await pyusdContract.approve(CONTRACTS.PYLINKS_CORE, amountWei, {
+        gasLimit: 80000
+      });
+      
+      toast.success("Transaction submitted! Waiting for confirmation...");
+      await tx.wait();
       
       toast.success("Approval successful! You can now process the payment.");
-      loadUserBalances();
+      await loadUserBalances();
     } catch (error: any) {
       console.error("Approval error:", error);
-      toast.error(`Approval failed: ${error.message}`);
+      
+      if (error.code === 4001) {
+        toast.error("Transaction rejected by user");
+      } else {
+        toast.error(`Approval failed: ${error.message}`);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const processPayment = async () => {
-    if (!pyLinksService || !paymentDetails || !user?.wallet?.address) return;
+    if (!paymentDetails || !user?.wallet?.address) return;
 
     try {
       setLoading(true);
       setPaymentStatus("processing");
 
       // Check allowance
-      const requiredAmount = parseFloat(amount || "0");
+      const requiredAmount = parseFloat(paymentDetails.amount);
       const currentAllowance = parseFloat(pyusdAllowance);
       
       if (currentAllowance < requiredAmount) {
@@ -180,13 +202,29 @@ export default function PyLinksPaymentPage() {
         return;
       }
 
-      // Process payment through PyLinksCore
-      const tx = await pyLinksService.processPayment(paymentDetails.id);
-      setTxHash(tx.hash);
+      if (!window.ethereum) {
+        throw new Error("No wallet provider found. Please install MetaMask.");
+      }
       
-      toast.success("Payment submitted! Waiting for confirmation...");
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const pyLinksContract = new ethers.Contract(
+        CONTRACTS.PYLINKS_CORE, 
+        ["function processPayment(uint256 paymentId) external"], 
+        signer
+      );
+
+      toast.success("Processing payment...");
       
+      // Use Web3Provider directly for payment processing
+      const tx = await pyLinksContract.processPayment(paymentDetails.id, {
+        gasLimit: 150000
+      });
+      
+      toast.success("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
+      
+      setTxHash(tx.hash);
       setPaymentStatus("success");
       
       toast.success("Payment completed successfully!");
@@ -221,7 +259,15 @@ export default function PyLinksPaymentPage() {
     );
   }
 
-  if (!sessionId || !amount || !description) {
+  if (sessionLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!paymentId || !paymentDetails) {
     return (
       <div className="container mx-auto p-6 max-w-md">
         <Alert>
@@ -252,10 +298,10 @@ export default function PyLinksPaymentPage() {
           <div className="space-y-4">
             <div className="text-center">
               <div className="text-3xl font-bold text-green-600">
-                ${amount} PYUSD
+                ${paymentDetails.amount} PYUSD
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                {description}
+                Payment ID: {paymentDetails.id}
               </p>
             </div>
 
@@ -264,15 +310,15 @@ export default function PyLinksPaymentPage() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span>Amount:</span>
-                <span className="font-medium">${amount} PYUSD</span>
+                <span className="font-medium">${paymentDetails.amount} PYUSD</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span>Platform Fee (0.1%):</span>
-                <span className="font-medium">${(parseFloat(amount) * 0.001).toFixed(6)} PYUSD</span>
+                <span className="font-medium">${(parseFloat(paymentDetails.amount) * 0.001).toFixed(6)} PYUSD</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span>Total:</span>
-                <span className="font-medium">${amount} PYUSD</span>
+                <span className="font-medium">${paymentDetails.amount} PYUSD</span>
               </div>
               
               {timeRemaining && timeRemaining !== "Expired" && (
@@ -294,14 +340,12 @@ export default function PyLinksPaymentPage() {
               <AlertDescription className="text-green-800">
                 Payment completed successfully!
                 {txHash && (
-                  <a
-                    href={`https://eth-sepolia.blockscout.com/tx/${txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => openTransaction(txHash)}
                     className="ml-2 inline-flex items-center gap-1 text-blue-600 hover:underline"
                   >
                     View Transaction <ExternalLink className="h-3 w-3" />
-                  </a>
+                  </button>
                 )}
               </AlertDescription>
             </Alert>
@@ -341,14 +385,14 @@ export default function PyLinksPaymentPage() {
               </div>
 
               {/* Payment Actions */}
-              {parseFloat(pyusdBalance) < parseFloat(amount) ? (
+              {parseFloat(pyusdBalance) < parseFloat(paymentDetails.amount) ? (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    Insufficient PYUSD balance. You need ${amount} PYUSD to complete this payment.
+                    Insufficient PYUSD balance. You need ${paymentDetails.amount} PYUSD to complete this payment.
                   </AlertDescription>
                 </Alert>
-              ) : parseFloat(pyusdAllowance) < parseFloat(amount) ? (
+              ) : parseFloat(pyusdAllowance) < parseFloat(paymentDetails.amount) ? (
                 <Button
                   onClick={approvePayment}
                   className="w-full"
@@ -383,7 +427,7 @@ export default function PyLinksPaymentPage() {
                 <div className="flex items-center gap-2 text-sm text-blue-800">
                   <Gift className="h-4 w-4" />
                   <span>
-                    Earn {Math.floor(parseFloat(amount))} spin credits with this payment!
+                    Earn {Math.floor(parseFloat(paymentDetails.amount))} spin credits with this payment!
                   </span>
                 </div>
               </div>
