@@ -326,12 +326,10 @@ export default function Subscriptions() {
                           <Badge variant="outline" className="text-green-600">
                             {subscription.status}
                           </Badge>
-                          <Button
-                            variant="outline"
+                          <Button 
+                            variant="outline" 
                             size="sm"
-                            onClick={() =>
-                              handleSubscriptionPayment(subscription)
-                            }
+                            onClick={() => handleSubscriptionPayment(subscription)}
                           >
                             <DollarSign className="h-4 w-4" />
                           </Button>

@@ -163,6 +163,23 @@ export class PyLinksCoreService {
       request.isOneTime || true
     );
   }
+  async getPaymentBySessionId(
+    sessionId: string
+  ): Promise<PaymentDetails | null> {
+    try {
+      // Get payment ID from session mapping
+      const paymentId = await this.contract.sessionToPayment(sessionId);
+
+      if (paymentId.isZero()) {
+        return null;
+      }
+
+      return await this.getPayment(paymentId.toNumber());
+    } catch (error) {
+      console.error("Error fetching payment by session:", error);
+      return null;
+    }
+  }
 
   /**
    * Create an escrow payment with USD pricing
@@ -270,7 +287,7 @@ export class PyLinksCoreService {
   ): Promise<{ batchId: number; paymentIds: number[] } | null> {
     if (!this.signer) throw new Error("Signer required for write operations");
 
-    const amounts = request.amounts.map(amount => 
+    const amounts = request.amounts.map((amount) =>
       ethers.utils.parseUnits(amount, 6)
     );
 
@@ -281,15 +298,17 @@ export class PyLinksCoreService {
     );
 
     const receipt = await tx.wait();
-    const event = receipt.events?.find((e: any) => e.event === 'BulkBatchCreated');
-    
+    const event = receipt.events?.find(
+      (e: any) => e.event === "BulkBatchCreated"
+    );
+
     if (event) {
       return {
         batchId: event.args.batchId.toNumber(),
-        paymentIds: [] // Would need to parse from events
+        paymentIds: [], // Would need to parse from events
       };
     }
-    
+
     return null;
   }
 
@@ -301,23 +320,25 @@ export class PyLinksCoreService {
   ): Promise<{ batchId: number; paymentIds: number[] } | null> {
     if (!this.signer) throw new Error("Signer required for write operations");
 
-    const formattedRequests = requests.map(req => ({
+    const formattedRequests = requests.map((req) => ({
       merchant: req.merchant,
       amount: ethers.utils.parseUnits(req.amount, 6),
-      description: req.description
+      description: req.description,
     }));
 
     const tx = await this.contract.bulkPayMultipleMerchants(formattedRequests);
     const receipt = await tx.wait();
-    const event = receipt.events?.find((e: any) => e.event === 'BulkBatchCreated');
-    
+    const event = receipt.events?.find(
+      (e: any) => e.event === "BulkBatchCreated"
+    );
+
     if (event) {
       return {
         batchId: event.args.batchId.toNumber(),
-        paymentIds: [] // Would need to parse from events
+        paymentIds: [], // Would need to parse from events
       };
     }
-    
+
     return null;
   }
 
@@ -330,11 +351,12 @@ export class PyLinksCoreService {
   ): Promise<{ batchId: number; paymentIds: number[] } | null> {
     if (!this.signer) throw new Error("Signer required for write operations");
 
-    const updateFee = priceUpdateData.length > 0
-      ? await this.getPriceUpdateFee(priceUpdateData)
-      : ethers.BigNumber.from(0);
+    const updateFee =
+      priceUpdateData.length > 0
+        ? await this.getPriceUpdateFee(priceUpdateData)
+        : ethers.BigNumber.from(0);
 
-    const usdAmounts = request.usdAmounts.map(amount => 
+    const usdAmounts = request.usdAmounts.map((amount) =>
       ethers.utils.parseUnits(amount, 8)
     );
 
@@ -349,22 +371,26 @@ export class PyLinksCoreService {
     );
 
     const receipt = await tx.wait();
-    const event = receipt.events?.find((e: any) => e.event === 'BulkBatchCreated');
-    
+    const event = receipt.events?.find(
+      (e: any) => e.event === "BulkBatchCreated"
+    );
+
     if (event) {
       return {
         batchId: event.args.batchId.toNumber(),
-        paymentIds: [] // Would need to parse from events
+        paymentIds: [], // Would need to parse from events
       };
     }
-    
+
     return null;
   }
 
   /**
    * Process bulk escrow batch
    */
-  async processBulkEscrowBatch(batchId: number): Promise<ethers.ContractTransaction> {
+  async processBulkEscrowBatch(
+    batchId: number
+  ): Promise<ethers.ContractTransaction> {
     if (!this.signer) throw new Error("Signer required for write operations");
     return await this.contract.processBulkEscrowBatch(batchId);
   }
@@ -382,7 +408,7 @@ export class PyLinksCoreService {
         totalFees: ethers.utils.formatUnits(result.totalFees, 6),
         paymentCount: result.paymentCount.toNumber(),
         processed: result.processed,
-        createdAt: Date.now() // Contract doesn't return this in getBulkBatch
+        createdAt: Date.now(), // Contract doesn't return this in getBulkBatch
       };
     } catch (error) {
       return null;
@@ -439,19 +465,25 @@ export class PyLinksCoreService {
   /**
    * Get payment details
    */
-  async getPayment(paymentId: number): Promise<PaymentDetails> {
-    const result = await this.contract.getPayment(paymentId);
-    return {
-      id: paymentId,
-      merchant: result.merchant,
-      customer: result.customer,
-      amount: ethers.utils.formatUnits(result.amount, 6),
-      sessionId: result.sessionId,
-      status: result.status,
-      paymentType: result.paymentType,
-      createdAt: result.createdAt.toNumber(),
-      expiresAt: result.expiresAt.toNumber(),
-    };
+  async getPayment(paymentId: number): Promise<PaymentDetails | null> {
+    try {
+      const payment = await this.contract.getPayment(paymentId);
+
+      return {
+        id: paymentId,
+        merchant: payment.merchant,
+        customer: payment.customer,
+        amount: ethers.utils.formatUnits(payment.amount, 6),
+        sessionId: payment.sessionId,
+        status: payment.status,
+        paymentType: payment.paymentType,
+        createdAt: payment.createdAt.toNumber(),
+        expiresAt: payment.expiresAt.toNumber(),
+      };
+    } catch (error) {
+      console.error("Error fetching payment:", error);
+      return null;
+    }
   }
 
   /**
@@ -645,7 +677,9 @@ export class PyLinksCoreService {
   /**
    * Generate bulk session ID
    */
-  static generateBulkSessionId(type: 'single' | 'multiple'): string {
-    return `bulk_${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  static generateBulkSessionId(type: "single" | "multiple"): string {
+    return `bulk_${type}_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
   }
 }
