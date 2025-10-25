@@ -30,6 +30,13 @@ export interface PaymentNotification {
   type: "received" | "sent" | "escrow_created" | "escrow_released";
 }
 
+export interface WelcomeEmailNotification {
+  email: string;
+  name: string;
+  userType: "merchant" | "customer";
+  walletAddress?: string;
+}
+
 export class NotificationService {
   private transporter: nodemailer.Transporter;
   private fromEmail: string;
@@ -58,6 +65,102 @@ export class NotificationService {
       console.log("✅ Email transporter is ready");
     } catch (error) {
       console.error("❌ Email transporter verification failed:", error);
+    }
+  }
+
+  /**
+   * Send welcome email to new users
+   */
+  async sendWelcomeEmail(data: WelcomeEmailNotification): Promise<void> {
+    try {
+      const subject = `🎉 Welcome to PyLinks - Your ${data.userType === 'merchant' ? 'Merchant' : 'Customer'} Account is Ready!`;
+      
+      const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to PyLinks!</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Seamless PYUSD payments for everyone</p>
+          </div>
+          
+          <div style="padding: 40px 30px; background: #f8f9fa;">
+            <h2 style="color: #333; margin-bottom: 20px;">Hello ${data.name}! 👋</h2>
+            
+            <div style="background: white; padding: 25px; border-radius: 12px; margin-bottom: 25px; border-left: 4px solid #667eea;">
+              <h3 style="margin-top: 0; color: #667eea;">Your Account Details</h3>
+              <p><strong>Account Type:</strong> ${data.userType === 'merchant' ? 'Merchant' : 'Customer'}</p>
+              <p><strong>Email:</strong> ${data.email}</p>
+              ${data.walletAddress ? `<p><strong>Wallet:</strong> ${data.walletAddress}</p>` : ''}
+            </div>
+
+            ${data.userType === 'merchant' ? `
+              <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="margin-top: 0; color: #1976d2;">🏪 Merchant Features Available:</h3>
+                <ul style="margin: 0; padding-left: 20px; color: #333;">
+                  <li>Create payment links and QR codes</li>
+                  <li>Accept PYUSD payments with low fees</li>
+                  <li>Real-time payment notifications</li>
+                  <li>Comprehensive analytics dashboard</li>
+                  <li>Bulk payment processing</li>
+                  <li>Escrow payment protection</li>
+                </ul>
+              </div>
+            ` : `
+              <div style="background: #e8f5e8; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="margin-top: 0; color: #2e7d32;">💳 Customer Features Available:</h3>
+                <ul style="margin: 0; padding-left: 20px; color: #333;">
+                  <li>Secure PYUSD payments</li>
+                  <li>Transaction history tracking</li>
+                  <li>QR code payment scanning</li>
+                  <li>Dispute resolution support</li>
+                  <li>Loyalty rewards program</li>
+                </ul>
+              </div>
+            `}
+
+            <div style="background: #fff3e0; border: 1px solid #ffb74d; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+              <h3 style="margin-top: 0; color: #f57c00;">🚀 Getting Started</h3>
+              <p style="margin: 0; color: #333;">
+                ${data.userType === 'merchant' 
+                  ? 'Visit your merchant dashboard to create your first payment link and start accepting PYUSD payments instantly!'
+                  : 'You can now make secure payments using PYUSD. Look for PyLinks QR codes or payment links from merchants.'
+                }
+              </p>
+            </div>
+            
+            <div style="text-align: center;">
+              <a href="${process.env.FRONTEND_URL}/${data.userType === 'merchant' ? 'dashboard' : 'customer-dashboard'}" 
+                 style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold;">
+                ${data.userType === 'merchant' ? 'Access Merchant Dashboard' : 'Access Customer Portal'}
+              </a>
+            </div>
+          </div>
+          
+          <div style="background: #333; color: white; padding: 25px; text-align: center;">
+            <h3 style="margin-top: 0;">Need Help?</h3>
+            <p style="margin: 10px 0;">Our support team is here to help you get the most out of PyLinks.</p>
+            <p style="margin: 0;">
+              <a href="${process.env.FRONTEND_URL}/support" style="color: #667eea;">Contact Support</a> | 
+              <a href="${process.env.FRONTEND_URL}/docs" style="color: #667eea;">Documentation</a>
+            </p>
+          </div>
+          
+          <div style="padding: 20px; text-align: center; color: #666; font-size: 12px;">
+            <p>This is an automated welcome email from PyLinks. Please do not reply to this email.</p>
+            <p>© 2024 PyLinks. All rights reserved.</p>
+          </div>
+        </div>
+      `;
+
+      await this.transporter.sendMail({
+        from: this.fromEmail,
+        to: data.email,
+        subject,
+        html,
+      });
+
+      console.log(`✅ Welcome email sent to ${data.email}`);
+    } catch (error) {
+      console.error("❌ Error sending welcome email:", error);
     }
   }
 

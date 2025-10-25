@@ -3,6 +3,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { ethers } from 'ethers';
 import { PyLinksCoreService, PaymentDetails, SubscriptionDetails, AffiliateDetails, BulkPaymentRequest, BulkPaymentToSingleRequest, BulkEscrowPaymentRequest, BulkBatchDetails } from '@/lib/contracts/pylinks-core';
 import { toast } from 'sonner';
+import { getTransactionUrl, openTransaction } from '@/lib/utils/blockscout';
 
 interface UsePyLinksCoreReturn {
   service: PyLinksCoreService | null;
@@ -93,7 +94,15 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
       toast.success('Payment creation submitted...');
       
       const receipt = await tx.wait();
-      toast.success('Payment created successfully!');
+      
+      // Show success with Blockscout link
+      toast.success('Payment created successfully!', {
+        duration: 8000,
+        action: {
+          label: 'View on Explorer',
+          onClick: () => openTransaction(receipt.transactionHash)
+        }
+      });
       
       return receipt.transactionHash;
     } catch (error: any) {
