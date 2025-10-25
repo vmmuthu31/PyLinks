@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { ethers } from 'ethers';
-import { PyLinksCoreService, PaymentDetails, SubscriptionDetails, AffiliateDetails } from '@/lib/contracts/pylinks-core';
+import { PyLinksCoreService, PaymentDetails, SubscriptionDetails, AffiliateDetails, BulkPaymentRequest, BulkPaymentToSingleRequest, BulkEscrowPaymentRequest, BulkBatchDetails } from '@/lib/contracts/pylinks-core';
 import { toast } from 'sonner';
 
 interface UsePyLinksCoreReturn {
@@ -13,6 +13,15 @@ interface UsePyLinksCoreReturn {
   createPayment: (request: any) => Promise<string | null>;
   processPayment: (paymentId: number) => Promise<boolean>;
   getPayment: (paymentId: number) => Promise<PaymentDetails | null>;
+  
+  // Bulk payment functions
+  bulkPaySingleMerchant: (request: BulkPaymentToSingleRequest) => Promise<{ batchId: number; paymentIds: number[] } | null>;
+  bulkPayMultipleMerchants: (requests: BulkPaymentRequest[]) => Promise<{ batchId: number; paymentIds: number[] } | null>;
+  bulkCreateEscrowPayments: (request: BulkEscrowPaymentRequest) => Promise<{ batchId: number; paymentIds: number[] } | null>;
+  processBulkEscrowBatch: (batchId: number) => Promise<boolean>;
+  getBulkBatch: (batchId: number) => Promise<BulkBatchDetails | null>;
+  getBulkBatchPayments: (batchId: number) => Promise<number[]>;
+  getCustomerBulkBatches: (customer: string) => Promise<number[]>;
   
   // Subscription functions
   createSubscription: (request: any) => Promise<number | null>;
@@ -29,6 +38,7 @@ interface UsePyLinksCoreReturn {
   getLoyaltyPoints: (user: string) => Promise<string>;
   getMerchantEarnings: (merchant: string) => Promise<string>;
   getAffiliateEarnings: (affiliate: string) => Promise<string>;
+  getCustomerPayments: (customer: string) => Promise<number[]>;
   
   // Refresh data
   refresh: () => void;
@@ -298,6 +308,141 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
     }
   }, [service, handleError]);
 
+  // Bulk payment functions
+  const bulkPaySingleMerchant = useCallback(async (request: BulkPaymentToSingleRequest): Promise<{ batchId: number; paymentIds: number[] } | null> => {
+    if (!service) {
+      toast.error('PyLinksCore service not initialized');
+      return null;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await service.bulkPaySingleMerchant(request);
+      toast.success('Bulk payment to single merchant completed!');
+      
+      return result;
+    } catch (error: any) {
+      handleError(error, 'Bulk pay single merchant');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [service, handleError]);
+
+  const bulkPayMultipleMerchants = useCallback(async (requests: BulkPaymentRequest[]): Promise<{ batchId: number; paymentIds: number[] } | null> => {
+    if (!service) {
+      toast.error('PyLinksCore service not initialized');
+      return null;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await service.bulkPayMultipleMerchants(requests);
+      toast.success('Bulk payment to multiple merchants completed!');
+      
+      return result;
+    } catch (error: any) {
+      handleError(error, 'Bulk pay multiple merchants');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [service, handleError]);
+
+  const bulkCreateEscrowPayments = useCallback(async (request: BulkEscrowPaymentRequest): Promise<{ batchId: number; paymentIds: number[] } | null> => {
+    if (!service) {
+      toast.error('PyLinksCore service not initialized');
+      return null;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await service.bulkCreateEscrowPayments(request);
+      toast.success('Bulk escrow payments created!');
+      
+      return result;
+    } catch (error: any) {
+      handleError(error, 'Bulk create escrow payments');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [service, handleError]);
+
+  const processBulkEscrowBatch = useCallback(async (batchId: number): Promise<boolean> => {
+    if (!service) {
+      toast.error('PyLinksCore service not initialized');
+      return false;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const tx = await service.processBulkEscrowBatch(batchId);
+      toast.success('Processing bulk escrow batch...');
+      
+      await tx.wait();
+      toast.success('Bulk escrow batch processed successfully!');
+      
+      return true;
+    } catch (error: any) {
+      return handleError(error, 'Process bulk escrow batch');
+    } finally {
+      setLoading(false);
+    }
+  }, [service, handleError]);
+
+  const getBulkBatch = useCallback(async (batchId: number): Promise<BulkBatchDetails | null> => {
+    if (!service) return null;
+
+    try {
+      return await service.getBulkBatch(batchId);
+    } catch (error: any) {
+      handleError(error, 'Get bulk batch');
+      return null;
+    }
+  }, [service, handleError]);
+
+  const getBulkBatchPayments = useCallback(async (batchId: number): Promise<number[]> => {
+    if (!service) return [];
+
+    try {
+      return await service.getBulkBatchPayments(batchId);
+    } catch (error: any) {
+      handleError(error, 'Get bulk batch payments');
+      return [];
+    }
+  }, [service, handleError]);
+
+  const getCustomerBulkBatches = useCallback(async (customer: string): Promise<number[]> => {
+    if (!service) return [];
+
+    try {
+      return await service.getCustomerBulkBatches(customer);
+    } catch (error: any) {
+      handleError(error, 'Get customer bulk batches');
+      return [];
+    }
+  }, [service, handleError]);
+
+  const getCustomerPayments = useCallback(async (customer: string): Promise<number[]> => {
+    if (!service) return [];
+
+    try {
+      return await service.getCustomerPayments(customer);
+    } catch (error: any) {
+      handleError(error, 'Get customer payments');
+      return [];
+    }
+  }, [service, handleError]);
+
   const refresh = useCallback(() => {
     setError(null);
     // Force re-initialization
@@ -319,6 +464,15 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
     processPayment,
     getPayment,
     
+    // Bulk payment functions
+    bulkPaySingleMerchant,
+    bulkPayMultipleMerchants,
+    bulkCreateEscrowPayments,
+    processBulkEscrowBatch,
+    getBulkBatch,
+    getBulkBatchPayments,
+    getCustomerBulkBatches,
+    
     // Subscription functions
     createSubscription,
     processSubscriptionPayment,
@@ -334,6 +488,7 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
     getLoyaltyPoints,
     getMerchantEarnings,
     getAffiliateEarnings,
+    getCustomerPayments,
     
     // Refresh
     refresh,
