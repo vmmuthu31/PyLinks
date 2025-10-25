@@ -20,8 +20,8 @@ export default function Login() {
       // Step 2: Call backend depending on button clicked
       const endpoint =
         type === "register"
-          ? `${process.env.VITE_BACKEND_URL}/api/merchants/register`
-          : `${process.env.VITE_BACKEND_URL}/api/merchants/login`;
+          ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/merchants/register`
+          : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/merchants/login`;
 
       const payload = {
         email: user.email,

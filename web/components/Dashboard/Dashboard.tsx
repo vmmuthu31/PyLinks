@@ -45,7 +45,7 @@ export default function Dashboard() {
 
       // Update wallet address on backend
       const res = await axios.put(
-        `${process.env.VITE_BACKEND_URL}/api/merchants/update-wallet`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/merchants/update-wallet`,
         { walletAddress: address },
         {
           headers: {
@@ -79,7 +79,7 @@ export default function Dashboard() {
     try {
       setLoading(true);
       const res = await axios.post(
-        `${process.env.VITE_BACKEND_URL}/api/merchants/regenerate-keys`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/merchants/regenerate-keys`,
         {},
         { headers: { "x-api-key": merchant.apiKey || "" } }
       );

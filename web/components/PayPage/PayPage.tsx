@@ -24,7 +24,7 @@ export default function PayPage() {
     const fetchMerchant = async () => {
       try {
         const res = await axios.get(
-          `${process.env.VITE_BACKEND_URL}/api/merchants/${merchantId}`
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/merchants/${merchantId}`
         );
         setMerchant(res.data.data);
       } catch (err) {
@@ -85,7 +85,7 @@ export default function PayPage() {
 
       // Record payment to backend (optional)
       await axios.post(
-        `${process.env.VITE_BACKEND_URL}/api/payments/record`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/payments/record`,
         {
           merchantId,
           txHash: tx.hash,
