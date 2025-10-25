@@ -4,22 +4,33 @@ import { usePrivy, useCreateWallet } from "@privy-io/react-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Loader2, 
-  LogIn, 
-  AlertCircle, 
-  Store, 
-  User, 
+import {
+  Loader2,
+  LogIn,
+  AlertCircle,
+  Store,
+  User,
   Wallet,
   Mail,
-  Shield
+  Shield,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { setUser, setLoading, setError, clearError } from "@/lib/store/slices/authSlice";
+import {
+  setUser,
+  setLoading,
+  setError,
+  clearError,
+} from "@/lib/store/slices/authSlice";
 import { setMerchant } from "@/lib/store/slices/merchantSlice";
 import { toast } from "sonner";
 import axios from "axios";
@@ -34,7 +45,7 @@ export default function AuthCard() {
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const { loading, error } = useAppSelector((state) => state.auth);
-  
+
   const [userType, setUserType] = useState<UserType>("merchant");
   const [action, setAction] = useState<AuthAction>("login");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -43,13 +54,15 @@ export default function AuthCard() {
   useEffect(() => {
     const merchantId = searchParams.get("merchantId");
     const amount = searchParams.get("amount");
-    
+
     if (merchantId && amount) {
       // Redirect customers to mobile app for payments
-      window.location.href = `pylinks://pay?merchantId=${merchantId}&amount=${amount}&memo=${searchParams.get("memo") || ""}`;
+      window.location.href = `pylinks://pay?merchantId=${merchantId}&amount=${amount}&memo=${
+        searchParams.get("memo") || ""
+      }`;
       return;
     }
-    
+
     // Default to merchant for web app
     setUserType("merchant");
   }, [searchParams]);
@@ -62,22 +75,41 @@ export default function AuthCard() {
 
   const handleAuthSuccess = async () => {
     if (!user || isProcessing) return;
-    
-    console.log("🔐 Starting authentication process...", { user, action, userType });
-    
+
+    console.log("🔐 Starting authentication process...", {
+      user,
+      action,
+      userType,
+    });
+
     try {
       setIsProcessing(true);
       dispatch(setLoading(true));
       dispatch(clearError());
 
       // Get user details from Privy's linked accounts
-      const googleAccount = user.linkedAccounts?.find(account => account.type === 'google_oauth');
-      const emailAccount = user.linkedAccounts?.find(account => account.type === 'email');
-      const walletAccount = user.linkedAccounts?.find(account => account.type === 'wallet');
-      
-      const userEmail = (googleAccount as any)?.email || (emailAccount as any)?.address || user.email?.address;
-      const userName = (googleAccount as any)?.name || user.google?.name || user.twitter?.name || userEmail?.split('@')[0] || 'Anonymous User';
-      let walletAddress = (walletAccount as any)?.address || user.wallet?.address || null;
+      const googleAccount = user.linkedAccounts?.find(
+        (account) => account.type === "google_oauth"
+      );
+      const emailAccount = user.linkedAccounts?.find(
+        (account) => account.type === "email"
+      );
+      const walletAccount = user.linkedAccounts?.find(
+        (account) => account.type === "wallet"
+      );
+
+      const userEmail =
+        (googleAccount as any)?.email ||
+        (emailAccount as any)?.address ||
+        user.email?.address;
+      const userName =
+        (googleAccount as any)?.name ||
+        user.google?.name ||
+        user.twitter?.name ||
+        userEmail?.split("@")[0] ||
+        "Anonymous User";
+      let walletAddress =
+        (walletAccount as any)?.address || user.wallet?.address || null;
 
       // For merchants, create a wallet if they don't have one
       if (userType === "merchant" && !walletAddress) {
@@ -94,26 +126,28 @@ export default function AuthCard() {
         }
       }
 
-      console.log("📋 Extracted user details:", { 
-        userEmail, 
-        userName, 
+      console.log("📋 Extracted user details:", {
+        userEmail,
+        userName,
         walletAddress,
         userType,
-        linkedAccounts: user.linkedAccounts?.map(acc => ({ 
-          type: acc.type, 
-          email: (acc as any).email, 
-          address: (acc as any).address 
-        }))
+        linkedAccounts: user.linkedAccounts?.map((acc) => ({
+          type: acc.type,
+          email: (acc as any).email,
+          address: (acc as any).address,
+        })),
       });
 
       if (!userEmail) {
-        throw new Error("Email is required for authentication. Please login with Google or email.");
+        throw new Error(
+          "Email is required for authentication. Please login with Google or email."
+        );
       }
 
       // Create signing message based on user type and wallet availability
       const timestamp = Date.now();
-      const message = walletAddress 
-        ? (userType === "merchant" 
+      const message = walletAddress
+        ? userType === "merchant"
           ? `Welcome to PyLinks Merchant Portal!
 
 By signing this message, you are authenticating as a MERCHANT with PyLinks.
@@ -137,8 +171,10 @@ Wallet: ${walletAddress}
 Timestamp: ${timestamp}
 Domain: ${window.location.hostname}
 
-This signature proves you own this wallet and authorizes payment transactions.`)
-        : `Welcome to PyLinks ${userType === "merchant" ? "Merchant Portal" : "Payment System"}!
+This signature proves you own this wallet and authorizes payment transactions.`
+        : `Welcome to PyLinks ${
+            userType === "merchant" ? "Merchant Portal" : "Payment System"
+          }!
 
 You are authenticating as a ${userType.toUpperCase()} with PyLinks using email authentication.
 
@@ -151,7 +187,7 @@ Domain: ${window.location.hostname}
 No wallet signature required for this authentication method.`;
 
       let signature = null;
-      
+
       // Skip signature for email-only authentication to avoid wallet connection errors
       // Signature will be required later when actually making payments or connecting wallet
       if (walletAddress && userType === "customer") {
@@ -163,7 +199,9 @@ No wallet signature required for this authentication method.`;
         } catch (signError) {
           console.error("❌ Signature failed:", signError);
           // Don't fail authentication, just proceed without signature
-          console.log("ℹ️ Proceeding without signature - will be required for payments");
+          console.log(
+            "ℹ️ Proceeding without signature - will be required for payments"
+          );
         }
       } else {
         // For merchants or customers without wallet, skip signature
@@ -171,12 +209,14 @@ No wallet signature required for this authentication method.`;
       }
 
       // Update Redux auth state first
-      dispatch(setUser({
-        id: user.id,
-        email: userEmail,
-        name: userName,
-        walletAddress: walletAddress,
-      }));
+      dispatch(
+        setUser({
+          id: user.id,
+          email: userEmail,
+          name: userName,
+          walletAddress: walletAddress,
+        })
+      );
 
       // Prepare payload for backend
       const payload = {
@@ -187,13 +227,13 @@ No wallet signature required for this authentication method.`;
         message: message,
         timestamp: timestamp,
         action: action,
-        userType: userType
+        userType: userType,
       };
 
-      console.log("🚀 Calling backend API...", { 
-        endpoint: action, 
+      console.log("🚀 Calling backend API...", {
+        endpoint: action,
         userType,
-        payload: { ...payload, signature: "***" } 
+        payload: { ...payload, signature: "***" },
       });
 
       // Call unified login endpoint - no separate register
@@ -201,25 +241,25 @@ No wallet signature required for this authentication method.`;
 
       const response = await axios.post(endpoint, payload, {
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         timeout: 10000, // 10 second timeout
       });
 
       console.log("📡 Backend response:", response.data);
-      
+
       if (response.data?.success) {
         const userData = response.data.data;
-        
+
         if (userType === "merchant") {
           dispatch(setMerchant(userData));
           localStorage.setItem("merchant", JSON.stringify(userData));
         } else {
           localStorage.setItem("customer", JSON.stringify(userData));
         }
-        
+
         toast.success(`Login successful! Redirecting...`);
-        
+
         // Redirect based on user type and context
         setTimeout(() => {
           if (userType === "merchant") {
@@ -229,9 +269,13 @@ No wallet signature required for this authentication method.`;
             const merchantId = searchParams.get("merchantId");
             const amount = searchParams.get("amount");
             const memo = searchParams.get("memo");
-            
+
             if (merchantId && amount) {
-              router.push(`/pay?merchantId=${merchantId}&amount=${amount}&memo=${memo || ""}`);
+              router.push(
+                `/pay?merchantId=${merchantId}&amount=${amount}&memo=${
+                  memo || ""
+                }`
+              );
             } else {
               router.push("/customer-dashboard");
             }
@@ -242,18 +286,18 @@ No wallet signature required for this authentication method.`;
       }
     } catch (error: any) {
       console.error("❌ Auth error:", error);
-      
+
       let errorMessage = "Authentication failed";
-      
+
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       dispatch(setError(errorMessage));
       toast.error(errorMessage);
-      
+
       // Logout user to reset state
       try {
         await logout();
@@ -268,15 +312,15 @@ No wallet signature required for this authentication method.`;
 
   const handleAuth = async (type: AuthAction) => {
     console.log(`🎯 Initiating ${type} for ${userType}...`);
-    
+
     setAction(type);
     dispatch(clearError());
-    
+
     if (!ready) {
       console.log("⏳ Privy not ready yet...");
       return;
     }
-    
+
     try {
       dispatch(setLoading(true));
       console.log("🔑 Opening Privy login modal...");
@@ -306,19 +350,22 @@ No wallet signature required for this authentication method.`;
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-gray-900 flex items-center justify-center gap-2">
-            {userType === "merchant" ? <Store className="h-6 w-6" /> : <User className="h-6 w-6" />}
+            {userType === "merchant" ? (
+              <Store className="h-6 w-6" />
+            ) : (
+              <User className="h-6 w-6" />
+            )}
             PyLinks {userType === "merchant" ? "Merchant" : "Customer"} Portal
           </CardTitle>
           <CardDescription>
-            {userType === "merchant" 
+            {userType === "merchant"
               ? "Access your merchant dashboard to manage PYUSD payments"
-              : isPaymentFlow 
-                ? `Complete payment of $${amount} USD`
-                : "Access your customer account for PYUSD payments"
-            }
+              : isPaymentFlow
+              ? `Complete payment of $${amount} USD`
+              : "Access your customer account for PYUSD payments"}
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           {/* Customer Login Redirect Notice */}
           {!isPaymentFlow && userType === "customer" && (
@@ -327,14 +374,17 @@ No wallet signature required for this authentication method.`;
                 <User className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-800">
                   <div className="space-y-2">
-                    <div className="font-medium">Customer Login Available on Mobile</div>
-                    <div className="text-sm">
-                      Customer authentication and payments are handled through our mobile app for enhanced security. 
-                      Please download the PyLinks mobile app to make payments.
+                    <div className="font-medium">
+                      Customer Login Available on Mobile
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <div className="text-sm">
+                      Customer authentication and payments are handled through
+                      our mobile app for enhanced security. Please download the
+                      PyLinks mobile app to make payments.
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="mt-2"
                       onClick={() => setUserType("merchant")}
                     >
@@ -359,16 +409,6 @@ No wallet signature required for this authentication method.`;
                   <Store className="h-4 w-4 mr-2" />
                   Merchant
                 </Button>
-                <Button
-                  variant={userType === "customer" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setUserType("customer")}
-                  className="flex-1"
-                  disabled={true}
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  Customer (Mobile Only)
-                </Button>
               </div>
             </div>
           )}
@@ -381,43 +421,24 @@ No wallet signature required for this authentication method.`;
               </AlertDescription>
             </Alert>
           )}
-          
+
           <div className="space-y-6">
             {/* Simplified login form */}
             <div className="text-center space-y-4">
-              <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mb-4">
-                <Badge variant="outline" className="flex items-center gap-1">
-                  {userType === "merchant" ? <Store className="h-3 w-3" /> : <User className="h-3 w-3" />}
-                  {userType.charAt(0).toUpperCase() + userType.slice(1)} Login
-                </Badge>
-              </div>
-              
               <div className="text-sm text-gray-600">
                 Login using Google or email to access your {userType} account.
-                {userType === "merchant" 
+                {userType === "merchant"
                   ? " A wallet will be automatically created for you to receive payments."
-                  : " You can login with email now and connect a wallet when making payments."
-                }
+                  : " You can login with email now and connect a wallet when making payments."}
               </div>
-              
-              <div className="flex items-center justify-center space-x-4 text-xs text-gray-500 my-3">
-                <div className="flex items-center gap-1">
-                  <Mail className="h-3 w-3" />
-                  <span>Email/Google</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Wallet className="h-3 w-3" />
-                  <span>Wallet</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Shield className="h-3 w-3" />
-                  <span>Signature</span>
-                </div>
-              </div>
-              
+
               <Button
                 onClick={() => handleAuth("login")}
-                disabled={loading || isProcessing || (userType === "customer" && !isPaymentFlow)}
+                disabled={
+                  loading ||
+                  isProcessing ||
+                  (userType === "customer" && !isPaymentFlow)
+                }
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 size="lg"
               >
@@ -429,28 +450,32 @@ No wallet signature required for this authentication method.`;
                 ) : (
                   <>
                     <LogIn className="mr-2 h-4 w-4" />
-                    Login as {userType.charAt(0).toUpperCase() + userType.slice(1)}
+                    Login as{" "}
+                    {userType.charAt(0).toUpperCase() + userType.slice(1)}
                   </>
                 )}
               </Button>
             </div>
           </div>
-          
+
           <Separator className="my-6" />
-          
+
           <div className="text-center space-y-2">
             <div className="text-xs text-gray-500">
-              Email authentication is secure and doesn't require wallet connection initially.
-              Wallet signatures are only needed for actual payments.
+              Email authentication is secure and doesn't require wallet
+              connection initially. Wallet signatures are only needed for actual
+              payments.
             </div>
             {userType === "merchant" && (
               <div className="text-xs text-blue-600 font-medium">
-                Merchants can create payment links, manage transactions, and access analytics.
+                Merchants can create payment links, manage transactions, and
+                access analytics.
               </div>
             )}
             {userType === "customer" && (
               <div className="text-xs text-green-600 font-medium">
-                Customers can make secure PYUSD payments and track transaction history.
+                Customers can make secure PYUSD payments and track transaction
+                history.
               </div>
             )}
           </div>
