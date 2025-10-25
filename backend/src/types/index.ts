@@ -19,6 +19,20 @@ export enum WebhookEventType {
   PAYMENT_FAILED = "payment.failed",
 }
 
+// User interface for authenticated requests
+export interface AuthUser {
+  id: string;
+  email: string;
+  walletAddress: string;
+  userType: "merchant" | "customer";
+  isAdmin: boolean;
+}
+
+// Extended Request interface with authenticated user
+export interface AuthenticatedRequest extends Request {
+  user: AuthUser;
+}
+
 export interface AuthRequest extends Request {
   merchant?: {
     id: string;
