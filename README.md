@@ -101,6 +101,52 @@ Our flagship `PyLinksCore` contract is a revolutionary all-in-one payment proces
 - 🎯 Incentivize repeat usage and referrals
 - � Trackable engagement metrics
 
+### 📤 Bulk Payments (Single & Multiple Recipients)
+
+PyLinks now supports bulk payment sending as a first-class feature. You can send a batch of payments to a single recipient (useful for payroll-like flows where multiple invoices are paid to the same wallet) or distribute a single payment across multiple recipients in one transaction (marketplace payouts, revenue shares).
+
+Key benefits:
+
+- ⚡ Gas-optimized batch execution for lower per-payment costs
+- 🔁 Atomic payouts (where applicable) to avoid partial failures
+- 📄 Consolidated receipts and on-chain proof for each payment
+- 🔒 Same security guarantees as single payments (escrow, dispute handling, and webhooks)
+
+Example SDK usage:
+
+```typescript
+// Bulk send to a single recipient (multiple invoices/payments to same wallet)
+const bulkToSingle = await pylinks.createBulkPaymentToOne({
+  recipient: "0xRecipientAddress",
+  payments: [
+    { amount: 10, description: "Invoice #1001" },
+    { amount: 25, description: "Invoice #1002" },
+    { amount: 5.5, description: "Refund #1003" },
+  ],
+  metadata: { batchId: "payroll-2025-10" },
+});
+
+// Bulk distribute a single payment to multiple recipients
+const bulkSplit = await pylinks.createBulkPaymentSplit({
+  totalAmount: 100,
+  splits: [
+    { recipient: "0xSeller1", bps: 7000 }, // 70%
+    { recipient: "0xPlatform", bps: 2500 }, // 25%
+    { recipient: "0xAffiliate", bps: 500 }, // 5%
+  ],
+  description: "Marketplace payout - order #4321",
+  metadata: { orderId: "4321" },
+});
+
+// Both calls will emit events per-payment and also provide consolidated webhook callbacks
+```
+
+#### Integration notes
+
+- Use `createBulkPaymentToOne` for repeated payments to one wallet (payroll, refunds, payouts).
+- Use `createBulkPaymentSplit` to atomically split and distribute a single payment across many recipients.
+- Both flows support `webhookUrl`, `sessionId`, `escrow` options, and NFT receipt minting per-payment.
+
 #### 🧾 NFT Receipt System
 
 Our `NFTReceipt` contract creates immutable payment proof:
@@ -591,7 +637,7 @@ app.post("/webhook", async (req, res) => {
 import { PyLinksCore__factory } from "@pylinks/contracts";
 
 const contract = PyLinksCore__factory.connect(
-  "0x6f0029F082e03ee480684aC5Ef7fF019813ac1C2",
+  "0xF67dd85750183cf55B875B59ceB0604C506480B6",
   provider
 );
 
@@ -645,7 +691,7 @@ console.log(
 
 | Contract        | Address                                      | Features                                                                                                                                         | BlockScout                                                                                                             |
 | --------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| **PyLinksCore** | `0x6f0029F082e03ee480684aC5Ef7fF019813ac1C2` | • Regular/Escrow/Subscription Payments<br/>• Payment Splits & Affiliate System<br/>• Gamification & Loyalty Points<br/>• Pyth Oracle Integration | [📊 View Contract](https://eth-sepolia.blockscout.com/address/0x6f0029F082e03ee480684aC5Ef7fF019813ac1C2)              |
+| **PyLinksCore** | `0xF67dd85750183cf55B875B59ceB0604C506480B6` | • Regular/Escrow/Subscription Payments<br/>• Payment Splits & Affiliate System<br/>• Gamification & Loyalty Points<br/>• Pyth Oracle Integration | [📊 View Contract](https://eth-sepolia.blockscout.com/address/0xF67dd85750183cf55B875B59ceB0604C506480B6)              |
 | **NFTReceipt**  | `0xDa348E77743be4dfD087c8d9C79F808F782A0218` | • Payment Proof NFTs<br/>• On-chain Metadata<br/>• SVG Generation<br/>• Merchant Branding                                                        | [🎨 View Contract](https://eth-sepolia.blockscout.com/address/0xDa348E77743be4dfD087c8d9C79F808F782A0218?tab=contract) |
 
 ### External Dependencies
@@ -860,7 +906,7 @@ PyLinks uses a **unified smart contract architecture** with PyLinksCore as the m
 
 | Contract        | Address                                      | BlockScout Link                                                                                                     |
 | --------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **PyLinksCore** | `0x6f0029F082e03ee480684aC5Ef7fF019813ac1C2` | [View Contract](https://eth-sepolia.blockscout.com/address/0x6f0029F082e03ee480684aC5Ef7fF019813ac1C2)              |
+| **PyLinksCore** | `0xF67dd85750183cf55B875B59ceB0604C506480B6` | [View Contract](https://eth-sepolia.blockscout.com/address/0xF67dd85750183cf55B875B59ceB0604C506480B6)              |
 | **NFTReceipt**  | `0xDa348E77743be4dfD087c8d9C79F808F782A0218` | [View Contract](https://eth-sepolia.blockscout.com/address/0xDa348E77743be4dfD087c8d9C79F808F782A0218?tab=contract) |
 | **PYUSD Token** | `0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9` | [View Token](https://eth-sepolia.blockscout.com/address/0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9)                 |
 | **Pyth Oracle** | `0xDd24F84d36BF92C65F92307595335bdFab5Bbd21` | [View Oracle](https://eth-sepolia.blockscout.com/address/0xDd24F84d36BF92C65F92307595335bdFab5Bbd21)                |
