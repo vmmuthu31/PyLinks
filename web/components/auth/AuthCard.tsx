@@ -32,6 +32,7 @@ import {
   clearError,
 } from "@/lib/store/slices/authSlice";
 import { setMerchant } from "@/lib/store/slices/merchantSlice";
+import { useLoadingBar } from "@/components/providers/LoadingBarProvider";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -45,6 +46,7 @@ export default function AuthCard() {
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const { loading, error } = useAppSelector((state) => state.auth);
+  const { start: startLoading, complete: completeLoading } = useLoadingBar();
 
   const [userType, setUserType] = useState<UserType>("merchant");
   const [action, setAction] = useState<AuthAction>("login");
@@ -86,6 +88,7 @@ export default function AuthCard() {
       setIsProcessing(true);
       dispatch(setLoading(true));
       dispatch(clearError());
+      startLoading();
 
       // Get user details from Privy's linked accounts
       const googleAccount = user.linkedAccounts?.find(
@@ -259,6 +262,7 @@ No wallet signature required for this authentication method.`;
         }
 
         toast.success(`Login successful! Redirecting...`);
+        completeLoading();
 
         // Redirect based on user type and context
         setTimeout(() => {
@@ -307,6 +311,7 @@ No wallet signature required for this authentication method.`;
     } finally {
       dispatch(setLoading(false));
       setIsProcessing(false);
+      completeLoading();
     }
   };
 
