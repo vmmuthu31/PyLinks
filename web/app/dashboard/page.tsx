@@ -4,7 +4,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import EnhancedDashboard from "@/components/dashboard/EnhancedDashboard";
+import CleanDashboard from "@/components/dashboard/CleanDashboard";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -40,7 +40,7 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <Suspense fallback={<DashboardFallback />}>
-        <EnhancedDashboard />
+        <CleanDashboard />
       </Suspense>
     </DashboardLayout>
   );
