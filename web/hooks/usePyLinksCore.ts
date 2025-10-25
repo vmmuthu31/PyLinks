@@ -39,6 +39,7 @@ interface UsePyLinksCoreReturn {
   getMerchantEarnings: (merchant: string) => Promise<string>;
   getAffiliateEarnings: (affiliate: string) => Promise<string>;
   getCustomerPayments: (customer: string) => Promise<number[]>;
+  getMerchantPayments: (merchant: string) => Promise<number[]>;
   
   // Refresh data
   refresh: () => void;
@@ -443,6 +444,17 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
     }
   }, [service, handleError]);
 
+  const getMerchantPayments = useCallback(async (merchant: string): Promise<number[]> => {
+    if (!service) return [];
+
+    try {
+      return await service.getMerchantPayments(merchant);
+    } catch (error: any) {
+      handleError(error, 'Get merchant payments');
+      return [];
+    }
+  }, [service, handleError]);
+
   const refresh = useCallback(() => {
     setError(null);
     // Force re-initialization
@@ -489,6 +501,7 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
     getMerchantEarnings,
     getAffiliateEarnings,
     getCustomerPayments,
+    getMerchantPayments,
     
     // Refresh
     refresh,
