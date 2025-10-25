@@ -7,7 +7,7 @@ export interface IMerchant extends Document {
   apiSecret: string;
   webhookUrl?: string;
   webhookSecret?: string;
-  walletAddress: string;
+  walletAddress?: string;
   isActive: boolean;
   metadata?: Record<string, any>;
   createdAt: Date;
@@ -45,7 +45,8 @@ const merchantSchema = new Schema<IMerchant>(
     },
     walletAddress: {
       type: String,
-      required: true,
+      required: false,
+      sparse: true,
     },
     isActive: {
       type: Boolean,
@@ -62,7 +63,7 @@ const merchantSchema = new Schema<IMerchant>(
 );
 
 merchantSchema.index({ apiKey: 1 }, { unique: true, sparse: true });
-merchantSchema.index({ walletAddress: 1 }, { unique: true });
+merchantSchema.index({ walletAddress: 1 }, { unique: true, sparse: true });
 merchantSchema.index({ email: 1 }, { unique: true });
 
 export const Merchant = mongoose.model<IMerchant>("Merchant", merchantSchema);

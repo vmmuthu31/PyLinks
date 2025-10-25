@@ -1,6 +1,6 @@
 "use client";
 
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useCreateWallet } from "@privy-io/react-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ type AuthAction = "login" | "register";
 
 export default function AuthCard() {
   const { ready, authenticated, user, login, logout, signMessage } = usePrivy();
+  const { createWallet } = useCreateWallet();
   const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
@@ -38,14 +39,19 @@ export default function AuthCard() {
   const [action, setAction] = useState<AuthAction>("login");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Check if this is a customer payment flow
+  // Check if this is a customer payment flow - redirect to mobile
   useEffect(() => {
     const merchantId = searchParams.get("merchantId");
     const amount = searchParams.get("amount");
     
     if (merchantId && amount) {
-      setUserType("customer");
+      // Redirect customers to mobile app for payments
+      window.location.href = `pylinks://pay?merchantId=${merchantId}&amount=${amount}&memo=${searchParams.get("memo") || ""}`;
+      return;
     }
+    
+    // Default to merchant for web app
+    setUserType("merchant");
   }, [searchParams]);
 
   useEffect(() => {
@@ -71,7 +77,22 @@ export default function AuthCard() {
       
       const userEmail = (googleAccount as any)?.email || (emailAccount as any)?.address || user.email?.address;
       const userName = (googleAccount as any)?.name || user.google?.name || user.twitter?.name || userEmail?.split('@')[0] || 'Anonymous User';
-      const walletAddress = (walletAccount as any)?.address || user.wallet?.address;
+      let walletAddress = (walletAccount as any)?.address || user.wallet?.address || null;
+
+      // For merchants, create a wallet if they don't have one
+      if (userType === "merchant" && !walletAddress) {
+        try {
+          console.log("🔧 Creating embedded wallet for merchant...");
+          const newWallet = await createWallet();
+          walletAddress = newWallet.address;
+          console.log("✅ Embedded wallet created:", walletAddress);
+          toast.success("Wallet created successfully!");
+        } catch (walletError) {
+          console.error("❌ Wallet creation failed:", walletError);
+          // Don't fail authentication if wallet creation fails
+          console.log("ℹ️ Proceeding without wallet - can be created later");
+        }
+      }
 
       console.log("📋 Extracted user details:", { 
         userEmail, 
@@ -131,25 +152,22 @@ No wallet signature required for this authentication method.`;
 
       let signature = null;
       
-      // Only require signature if user has a wallet connected
-      // For merchants: signature is optional (they can connect wallet later)
-      // For customers: signature is required for payments
-      if (walletAddress) {
-        console.log("✍️ Requesting signature...");
+      // Skip signature for email-only authentication to avoid wallet connection errors
+      // Signature will be required later when actually making payments or connecting wallet
+      if (walletAddress && userType === "customer") {
+        // Only require signature for customers who are making payments and have wallet
+        console.log("✍️ Requesting signature for customer payment...");
         try {
           signature = await signMessage({ message });
           console.log("✅ Message signed successfully");
         } catch (signError) {
           console.error("❌ Signature failed:", signError);
-          throw new Error("Wallet signature is required for authentication. Please connect a wallet first.");
+          // Don't fail authentication, just proceed without signature
+          console.log("ℹ️ Proceeding without signature - will be required for payments");
         }
-      } else if (userType === "customer") {
-        // For customers making payments, suggest wallet connection but allow email-only auth
-        // They'll be prompted to connect wallet when making actual payments
-        console.log("ℹ️ Customer authentication without wallet - will need wallet for payments");
       } else {
-        // For merchants, we can proceed without wallet signature
-        console.log("ℹ️ No wallet connected, proceeding without signature for merchant account");
+        // For merchants or customers without wallet, skip signature
+        console.log("ℹ️ Skipping signature for email-only authentication");
       }
 
       // Update Redux auth state first
@@ -164,7 +182,7 @@ No wallet signature required for this authentication method.`;
       const payload = {
         email: userEmail,
         name: userName,
-        walletAddress: walletAddress,
+        walletAddress: walletAddress || null, // Send null instead of undefined
         signature: signature,
         message: message,
         timestamp: timestamp,
@@ -302,6 +320,32 @@ No wallet signature required for this authentication method.`;
         </CardHeader>
         
         <CardContent>
+          {/* Customer Login Redirect Notice */}
+          {!isPaymentFlow && userType === "customer" && (
+            <div className="mb-6">
+              <Alert className="border-green-200 bg-green-50">
+                <User className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  <div className="space-y-2">
+                    <div className="font-medium">Customer Login Available on Mobile</div>
+                    <div className="text-sm">
+                      Customer authentication and payments are handled through our mobile app for enhanced security. 
+                      Please download the PyLinks mobile app to make payments.
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-2"
+                      onClick={() => setUserType("merchant")}
+                    >
+                      Continue as Merchant Instead
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
           {/* User Type Selection (only if not in payment flow) */}
           {!isPaymentFlow && (
             <div className="mb-6">
@@ -320,9 +364,10 @@ No wallet signature required for this authentication method.`;
                   size="sm"
                   onClick={() => setUserType("customer")}
                   className="flex-1"
+                  disabled={true}
                 >
                   <User className="h-4 w-4 mr-2" />
-                  Customer
+                  Customer (Mobile Only)
                 </Button>
               </div>
             </div>
@@ -347,13 +392,13 @@ No wallet signature required for this authentication method.`;
                 </Badge>
               </div>
               
-              <p className="text-sm text-gray-600">
-                Login using Google, email, or wallet to access your {userType} account.
+              <div className="text-sm text-gray-600">
+                Login using Google or email to access your {userType} account.
                 {userType === "merchant" 
-                  ? " Wallet connection is optional - you can connect it later in your dashboard."
+                  ? " A wallet will be automatically created for you to receive payments."
                   : " You can login with email now and connect a wallet when making payments."
                 }
-              </p>
+              </div>
               
               <div className="flex items-center justify-center space-x-4 text-xs text-gray-500 my-3">
                 <div className="flex items-center gap-1">
@@ -372,7 +417,7 @@ No wallet signature required for this authentication method.`;
               
               <Button
                 onClick={() => handleAuth("login")}
-                disabled={loading || isProcessing}
+                disabled={loading || isProcessing || (userType === "customer" && !isPaymentFlow)}
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 size="lg"
               >
@@ -394,19 +439,19 @@ No wallet signature required for this authentication method.`;
           <Separator className="my-6" />
           
           <div className="text-center space-y-2">
-            <p className="text-xs text-gray-500">
-              By continuing, you agree to sign a message to verify wallet ownership.
-              This is required for secure authentication with PyLinks.
-            </p>
+            <div className="text-xs text-gray-500">
+              Email authentication is secure and doesn't require wallet connection initially.
+              Wallet signatures are only needed for actual payments.
+            </div>
             {userType === "merchant" && (
-              <p className="text-xs text-blue-600 font-medium">
+              <div className="text-xs text-blue-600 font-medium">
                 Merchants can create payment links, manage transactions, and access analytics.
-              </p>
+              </div>
             )}
             {userType === "customer" && (
-              <p className="text-xs text-green-600 font-medium">
+              <div className="text-xs text-green-600 font-medium">
                 Customers can make secure PYUSD payments and track transaction history.
-              </p>
+              </div>
             )}
           </div>
         </CardContent>

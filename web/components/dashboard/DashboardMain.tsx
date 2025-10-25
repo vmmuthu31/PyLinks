@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useRouter } from "next/navigation";
+import { ethers } from "ethers";
 import {
   Card,
   CardContent,
@@ -29,6 +30,8 @@ import {
   DollarSign,
   CreditCard,
   TrendingUp,
+  Loader2,
+  Check,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { clearUser } from "@/lib/store/slices/authSlice";
@@ -53,6 +56,11 @@ export default function DashboardMain() {
   const [memo, setMemo] = useState("");
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [balances, setBalances] = useState({ eth: "0", pyusd: "0" });
+  const [loadingBalances, setLoadingBalances] = useState(false);
+  const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>(
+    {}
+  );
 
   useEffect(() => {
     const storedMerchant = localStorage.getItem("merchant");
@@ -60,6 +68,57 @@ export default function DashboardMain() {
       dispatch(updateMerchant(JSON.parse(storedMerchant)));
     }
   }, [merchant, dispatch]);
+
+  // Fetch wallet balances when wallet is connected
+  useEffect(() => {
+    if (merchant?.walletAddress) {
+      fetchWalletBalances();
+    }
+  }, [merchant?.walletAddress]);
+
+  const fetchWalletBalances = async () => {
+    if (!merchant?.walletAddress) return;
+
+    try {
+      setLoadingBalances(true);
+
+      // Connect to Sepolia testnet
+      const provider = new ethers.providers.JsonRpcProvider(
+        "https://ethereum-sepolia-rpc.publicnode.com"
+      );
+
+      // Get ETH balance
+      const ethBalance = await provider.getBalance(merchant.walletAddress);
+      const ethFormatted = ethers.utils.formatEther(ethBalance);
+
+      // PYUSD contract on Sepolia
+      const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9";
+      const PYUSD_ABI = [
+        "function balanceOf(address owner) view returns (uint256)",
+        "function decimals() view returns (uint8)",
+      ];
+
+      const pyusdContract = new ethers.Contract(
+        PYUSD_ADDRESS,
+        PYUSD_ABI,
+        provider
+      );
+      const pyusdBalance = await pyusdContract.balanceOf(
+        merchant.walletAddress
+      );
+      const pyusdFormatted = ethers.utils.formatUnits(pyusdBalance, 6); // PYUSD has 6 decimals
+
+      setBalances({
+        eth: parseFloat(ethFormatted).toFixed(4),
+        pyusd: parseFloat(pyusdFormatted).toFixed(2),
+      });
+    } catch (error) {
+      console.error("Error fetching balances:", error);
+      toast.error("Failed to fetch wallet balances");
+    } finally {
+      setLoadingBalances(false);
+    }
+  };
 
   const handleWalletConnect = async () => {
     try {
@@ -173,9 +232,36 @@ export default function DashboardMain() {
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} copied to clipboard!`);
+  const copyToClipboard = async (text: string, label: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+
+      // Show tick animation
+      setCopiedStates((prev) => ({ ...prev, [key]: true }));
+
+      // Enhanced toast with better styling
+      toast.success(`${label} copied to clipboard!`, {
+        duration: 2000,
+        style: {
+          background: "#10B981",
+          color: "white",
+          border: "none",
+        },
+      });
+
+      // Reset tick after 2 seconds
+      setTimeout(() => {
+        setCopiedStates((prev) => ({ ...prev, [key]: false }));
+      }, 2000);
+    } catch (error) {
+      toast.error(`Failed to copy ${label}`, {
+        style: {
+          background: "#EF4444",
+          color: "white",
+          border: "none",
+        },
+      });
+    }
   };
 
   const handleLogout = async () => {
@@ -255,7 +341,7 @@ export default function DashboardMain() {
                   </Label>
                   <p className="text-sm text-gray-900">{merchant.email}</p>
                 </div>
-                <div>
+                <div className="flex items-center gap-2">
                   <Label className="text-sm font-medium text-gray-700">
                     Wallet Status
                   </Label>
@@ -279,7 +365,7 @@ export default function DashboardMain() {
                     )}
                   </div>
                   {merchant.walletAddress && (
-                    <p className="text-xs text-gray-500 font-mono mt-1">
+                    <p className="text-xs text-gray-500 font-mono">
                       {merchant.walletAddress.slice(0, 6)}...
                       {merchant.walletAddress.slice(-4)}
                     </p>
@@ -288,48 +374,130 @@ export default function DashboardMain() {
               </CardContent>
             </Card>
 
-            {/* Wallet Actions Card */}
+            {/* Wallet Information Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Wallet className="h-5 w-5" />
-                  Wallet Management
+                  Wallet Information
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Button
-                  onClick={handleWalletConnect}
-                  disabled={connecting}
-                  className="w-full"
-                  variant={merchant.walletAddress ? "secondary" : "default"}
-                >
-                  {connecting ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Connecting...
-                    </>
-                  ) : merchant.walletAddress ? (
-                    <>
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Wallet Connected
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="mr-2 h-4 w-4" />
-                      Connect Wallet
-                    </>
-                  )}
-                </Button>
+              <CardContent className="space-y-4">
+                {merchant.walletAddress ? (
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">
+                        Wallet Address
+                      </Label>
+                      <div className="flex items-center gap-1 mt-1">
+                        <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono flex-1">
+                          {merchant.walletAddress}
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            merchant.walletAddress &&
+                            copyToClipboard(
+                              merchant.walletAddress,
+                              "Wallet Address",
+                              "walletAddress"
+                            )
+                          }
+                          className="h-7 w-7 p-0"
+                        >
+                          {copiedStates.walletAddress ? (
+                            <Check className="h-3 w-3 text-green-600" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
 
-                <Button
-                  onClick={handleCreateWallet}
-                  disabled={connecting}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Wallet className="mr-2 h-4 w-4" />
-                  Create New Wallet
-                </Button>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">
+                        Network
+                      </Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs">
+                          Ethereum Sepolia
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">
+                        Balances
+                      </Label>
+                      {loadingBalances ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span className="text-sm text-gray-600">
+                            Loading balances...
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 mt-1">
+                          <div className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <span className="text-sm font-medium">ETH</span>
+                            </div>
+                            <span className="text-sm font-mono">
+                              {balances.eth}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-sm font-medium">PYUSD</span>
+                            </div>
+                            <span className="text-sm font-mono">
+                              {balances.pyusd}
+                            </span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={fetchWalletBalances}
+                            className="w-full mt-2"
+                            disabled={loadingBalances}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-2" />
+                            Refresh Balances
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <Wallet className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <div className="text-sm text-gray-600 mb-3">
+                      No wallet connected
+                    </div>
+                    <Button
+                      onClick={handleCreateWallet}
+                      disabled={connecting}
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                    >
+                      {connecting ? (
+                        <>
+                          <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Wallet className="mr-2 h-3 w-3" />
+                          Create Wallet
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -352,9 +520,15 @@ export default function DashboardMain() {
                     size="sm"
                     variant="ghost"
                     className="absolute right-1 top-1 h-8 w-8 p-0"
-                    onClick={() => copyToClipboard(merchant.apiKey, "API Key")}
+                    onClick={() =>
+                      copyToClipboard(merchant.apiKey, "API Key", "apiKey")
+                    }
                   >
-                    <Copy className="h-3 w-3" />
+                    {copiedStates.apiKey ? (
+                      <Check className="h-3 w-3 text-green-600" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
                   </Button>
                 </div>
                 <Button
@@ -455,10 +629,14 @@ export default function DashboardMain() {
                               <Button
                                 size="sm"
                                 onClick={() =>
-                                  copyToClipboard(qrUrl, "Payment URL")
+                                  copyToClipboard(qrUrl, "Payment URL", "qrUrl")
                                 }
                               >
-                                <Copy className="h-3 w-3" />
+                                {copiedStates.qrUrl ? (
+                                  <Check className="h-3 w-3 text-green-600" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
                               </Button>
                             </div>
                           </div>

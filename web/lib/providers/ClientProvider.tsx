@@ -10,17 +10,24 @@ function ClientProvider({ children }: { children: React.ReactNode }) {
     <ReduxProvider store={store}>
       <PrivyProvider
         appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || ""}
-        clientId={process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID || ""}
         config={{
-          loginMethods: ["wallet", "google", "email"],
+          loginMethods: ["google", "email"],
           appearance: {
             theme: "light",
             accentColor: "#6366f1",
+            logo: undefined,
             walletChainType: "ethereum-only",
           },
+          embeddedWallets: {
+            ethereum: {
+              createOnLogin: "users-without-wallets",
+            },
+          },
+          walletConnectCloudProjectId:
+            process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
           supportedChains: [
             {
-              id: 11155111,
+              id: 11155111, // Sepolia
               name: "Sepolia",
               network: "sepolia",
               nativeCurrency: {
@@ -44,6 +51,31 @@ function ClientProvider({ children }: { children: React.ReactNode }) {
               },
             },
           ],
+          // Fix wallet connection issues
+          defaultChain: {
+            id: 11155111,
+            name: "Sepolia",
+            network: "sepolia",
+            nativeCurrency: {
+              decimals: 18,
+              name: "Ethereum",
+              symbol: "ETH",
+            },
+            rpcUrls: {
+              default: {
+                http: ["https://ethereum-sepolia-rpc.publicnode.com"],
+              },
+              public: {
+                http: ["https://ethereum-sepolia-rpc.publicnode.com"],
+              },
+            },
+            blockExplorers: {
+              default: {
+                name: "Etherscan",
+                url: "https://sepolia.etherscan.io",
+              },
+            },
+          },
         }}
       >
         {children}
