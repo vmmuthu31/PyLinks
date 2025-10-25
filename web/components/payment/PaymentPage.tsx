@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ interface Merchant {
 
 export default function PaymentPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { ready, authenticated, user, login, linkWallet } = usePrivy();
   
   const [merchant, setMerchant] = useState<Merchant | null>(null);
@@ -74,7 +75,10 @@ export default function PaymentPage() {
     
     try {
       if (!authenticated) {
-        await login();
+        // Redirect to auth page with payment parameters
+        const currentUrl = new URL(window.location.href);
+        const authUrl = `/?merchantId=${merchantId}&amount=${amount}&memo=${memo || ''}`;
+        router.push(authUrl);
       } else if (!user?.wallet) {
         await linkWallet();
       }
@@ -264,7 +268,7 @@ export default function PaymentPage() {
                 size="lg"
               >
                 <Wallet className="mr-2 h-4 w-4" />
-                Connect Wallet to Pay
+                Login to Pay
               </Button>
             ) : !user?.wallet ? (
               <Button

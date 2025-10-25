@@ -3,7 +3,7 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import LoginCard from "@/components/auth/LoginCard";
+import AuthCard from "@/components/auth/AuthCard";
 import { useAppSelector } from "@/lib/store/hooks";
 
 export default function Home() {
@@ -35,5 +35,5 @@ export default function Home() {
     );
   }
 
-  return <LoginCard />;
+  return <AuthCard />;
 }
