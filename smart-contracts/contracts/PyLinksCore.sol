@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
+import "./PaymentLib.sol";
 
 interface INFTReceipt {
     function mintReceipt(
@@ -22,17 +23,41 @@ interface INFTReceipt {
 
 /**
  * @title PyLinksCore
- * @notice Unified payment processing contract with all features integrated
- * @dev Main contract that handles:
- * - Regular payments (10min expiry, one-time use, 0.1% fees)
- * - Escrow payments with Pyth dynamic pricing
- * - Subscription/recurring payments
- * - Payment splits and affiliate rewards
- * - Gamification (spin credits)
- * - NFT receipt minting
+ * @notice Unified payment processing contract with bulk payment features
+ * @dev Includes regular, escrow, subscription, and bulk payment processing
  */
 contract PyLinksCore is ReentrancyGuard, Ownable {
     using Counters for Counters.Counter;
+    using PaymentLib for *;
+    
+    // Custom Errors (saves significant bytecode)
+    error InvalidMerchant();
+    error InvalidAmount();
+    error InvalidCount();
+    error LengthMismatch();
+    error TransferFailed();
+    error PaymentNotFound();
+    error PaymentNotAvailable();
+    error PaymentExpired();
+    error InvalidSession();
+    error SessionExists();
+    error InvalidCustomer();
+    error InsufficientFee();
+    error InvalidPrice();
+    error OneTimeUsed();
+    error NotEscrowed();
+    error NotAuthorized();
+    error NotActive();
+    error PaymentNotDue();
+    error SubscriptionCompleted();
+    error AlreadyRegistered();
+    error NameRequired();
+    error CodeExists();
+    error NoEarnings();
+    error InvalidTreasury();
+    error InvalidInterval();
+    error BatchNotFound();
+    error BatchProcessed();
     
     // Core contracts
     IERC20 public immutable pyusd;
@@ -43,34 +68,41 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
     Counters.Counter private _paymentIds;
     Counters.Counter private _subscriptionIds;
     Counters.Counter private _affiliateIds;
+    Counters.Counter private _bulkBatchIds;
     
     // Constants
     bytes32 public constant PYUSD_USD_PRICE_ID = 0xc1da1b73d7f01e7ddd54b3766cf7fcd644395ad14f70aa706ec5384c59e76692;
-    uint256 public constant PLATFORM_FEE_BPS = 10; // 0.1%
+    uint256 public constant PLATFORM_FEE_BPS = 10;
     uint256 public constant MAX_FEE_BPS = 10000;
     uint256 public constant PAYMENT_EXPIRY = 10 minutes;
-    uint256 public constant AFFILIATE_REWARD_BPS = 2000; // 20% of fee
+    uint256 public constant AFFILIATE_REWARD_BPS = 2000;
     uint256 public constant ESCROW_PERIOD = 7 days;
+    uint256 public constant MAX_BULK_PAYMENTS = 100;
     
     address public treasury;
     
     // Enums
     enum PaymentStatus { Created, Paid, Expired, Refunded, Cancelled, Escrowed, Disputed }
-    enum PaymentType { Regular, Escrow, Subscription }
+    enum PaymentType { Regular, Escrow, Subscription, Bulk }
     enum SubscriptionStatus { Active, Paused, Cancelled, Expired }
     
     // Structs
     struct SplitRecipient {
         address recipient;
-        uint256 bps; // Basis points
+        uint256 bps;
+    }
+    
+    struct MerchantTotal {
+        address merchant;
+        uint256 amount;
     }
     
     struct Payment {
         uint256 id;
         address merchant;
         address customer;
-        uint256 amount; // PYUSD amount (6 decimals)
-        uint256 usdAmount; // USD amount (8 decimals) - for escrow
+        uint256 amount;
+        uint256 usdAmount;
         uint256 platformFee;
         uint256 netAmount;
         string sessionId;
@@ -85,21 +117,21 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         bool isOneTime;
         uint256 paidAt;
         bytes32 txHash;
-        // Escrow specific
         uint256 releaseTime;
         bool autoRelease;
         int64 priceAtCreation;
+        uint256 bulkBatchId;
     }
     
     struct Subscription {
         uint256 id;
         address merchant;
         address customer;
-        uint256 usdAmount; // Amount in USD (8 decimals)
-        uint256 interval; // Payment interval in seconds
+        uint256 usdAmount;
+        uint256 interval;
         uint256 nextPayment;
         uint256 totalPayments;
-        uint256 maxPayments; // 0 = unlimited
+        uint256 maxPayments;
         SubscriptionStatus status;
         string description;
         bool autoRenew;
@@ -114,9 +146,25 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         uint256 totalReferrals;
         uint256 totalVolume;
         uint256 totalEarnings;
-        uint256 tier; // 1=Bronze, 2=Silver, 3=Gold, 4=Diamond
+        uint256 tier;
         bool isActive;
         uint256 createdAt;
+    }
+    
+    struct BulkPaymentRequest {
+        address merchant;
+        uint256 amount;
+        string description;
+    }
+    
+    struct BulkBatch {
+        uint256 id;
+        address customer;
+        uint256 totalAmount;
+        uint256 totalFees;
+        uint256[] paymentIds;
+        uint256 createdAt;
+        bool processed;
     }
     
     // Storage
@@ -128,25 +176,25 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
     mapping(address => uint256) public affiliateEarnings;
     mapping(address => uint256) public escrowBalances;
     
-    // Subscriptions
     mapping(uint256 => Subscription) public subscriptions;
     mapping(address => uint256[]) public merchantSubscriptions;
     mapping(address => uint256[]) public customerSubscriptions;
     
-    // Affiliates
     mapping(uint256 => Affiliate) public affiliates;
     mapping(address => uint256) public walletToAffiliate;
     mapping(bytes32 => address) public codeToWallet;
     mapping(address => address) public customerToAffiliate;
     
-    // Gamification
+    mapping(uint256 => BulkBatch) public bulkBatches;
+    mapping(address => uint256[]) public customerBulkBatches;
+    
     mapping(address => uint256) public spinCredits;
     mapping(address => uint256) public loyaltyPoints;
     
     // Events
     event PaymentCreated(uint256 indexed paymentId, address indexed merchant, string sessionId, uint256 amount, PaymentType paymentType);
     event PaymentProcessed(uint256 indexed paymentId, address indexed customer, uint256 amount, uint256 platformFee);
-    event PaymentExpired(uint256 indexed paymentId);
+    event PaymentExpiredEvent(uint256 indexed paymentId);
     event PaymentRefunded(uint256 indexed paymentId, uint256 amount);
     event EscrowReleased(uint256 indexed paymentId, address indexed merchant);
     event PaymentDisputed(uint256 indexed paymentId);
@@ -160,6 +208,10 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
     event SpinCreditsAdded(address indexed user, uint256 credits);
     event NFTReceiptMinted(uint256 indexed paymentId, uint256 indexed tokenId, address indexed customer);
     
+    event BulkBatchCreated(uint256 indexed batchId, address indexed customer, uint256 paymentCount, uint256 totalAmount);
+    event BulkBatchProcessed(uint256 indexed batchId, uint256 successCount, uint256 failureCount);
+    event BulkPaymentFailed(uint256 indexed batchId, uint256 indexed paymentId, string reason);
+    
     constructor(
         address _pyusd,
         address _pyth,
@@ -172,11 +224,371 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         nftReceipt = INFTReceipt(_nftReceipt);
     }
     
-    // ============ MAIN PAYMENT FUNCTIONS ============
+    // ============ BULK PAYMENT FUNCTIONS ============
     
-    /**
-     * @notice Create a regular payment (10min expiry, one-time use)
-     */
+    function bulkPaySingleMerchant(
+        address merchant,
+        uint256[] calldata amounts,
+        string[] calldata descriptions
+    ) external nonReentrant returns (uint256 batchId, uint256[] memory paymentIds) {
+        if (merchant == address(0)) revert InvalidMerchant();
+        if (amounts.length == 0 || amounts.length > MAX_BULK_PAYMENTS) revert InvalidCount();
+        if (amounts.length != descriptions.length) revert LengthMismatch();
+        
+        uint256 totalAmount = 0;
+        uint256 totalFees = 0;
+        
+        for (uint256 i = 0; i < amounts.length; i++) {
+            if (amounts[i] == 0) revert InvalidAmount();
+            totalAmount += amounts[i];
+            totalFees += (amounts[i] * PLATFORM_FEE_BPS) / MAX_FEE_BPS;
+        }
+        
+        if (!pyusd.transferFrom(msg.sender, address(this), totalAmount)) revert TransferFailed();
+        
+        _bulkBatchIds.increment();
+        batchId = _bulkBatchIds.current();
+        
+        paymentIds = new uint256[](amounts.length);
+        
+        for (uint256 i = 0; i < amounts.length; i++) {
+            _paymentIds.increment();
+            uint256 paymentId = _paymentIds.current();
+            paymentIds[i] = paymentId;
+            
+            uint256 platformFee = (amounts[i] * PLATFORM_FEE_BPS) / MAX_FEE_BPS;
+            uint256 netAmount = amounts[i] - platformFee;
+            
+            string memory sessionId = string(abi.encodePacked("bulk-", batchId, "-", i));
+            
+            Payment storage payment = payments[paymentId];
+            payment.id = paymentId;
+            payment.merchant = merchant;
+            payment.customer = msg.sender;
+            payment.amount = amounts[i];
+            payment.platformFee = platformFee;
+            payment.netAmount = netAmount;
+            payment.sessionId = sessionId;
+            payment.description = descriptions[i];
+            payment.status = PaymentStatus.Paid;
+            payment.paymentType = PaymentType.Bulk;
+            payment.createdAt = block.timestamp;
+            payment.paidAt = block.timestamp;
+            payment.expiresAt = block.timestamp + PAYMENT_EXPIRY;
+            payment.bulkBatchId = batchId;
+            payment.isOneTime = true;
+            
+            sessionToPayment[sessionId] = paymentId;
+            merchantPayments[merchant].push(paymentId);
+            customerPayments[msg.sender].push(paymentId);
+            
+            emit PaymentCreated(paymentId, merchant, sessionId, amounts[i], PaymentType.Bulk);
+            emit PaymentProcessed(paymentId, msg.sender, amounts[i], platformFee);
+        }
+        
+        bulkBatches[batchId] = BulkBatch({
+            id: batchId,
+            customer: msg.sender,
+            totalAmount: totalAmount,
+            totalFees: totalFees,
+            paymentIds: paymentIds,
+            createdAt: block.timestamp,
+            processed: true
+        });
+        
+        customerBulkBatches[msg.sender].push(batchId);
+        
+        uint256 merchantTotal = totalAmount - totalFees;
+        if (!pyusd.transfer(merchant, merchantTotal)) revert TransferFailed();
+        merchantEarnings[merchant] += merchantTotal;
+        
+        if (totalFees > 0) {
+            if (!pyusd.transfer(treasury, totalFees)) revert TransferFailed();
+        }
+        
+        uint256 credits = totalAmount / 1e6;
+        if (credits > 0) {
+            spinCredits[msg.sender] += credits;
+            loyaltyPoints[msg.sender] += credits;
+            emit SpinCreditsAdded(msg.sender, credits);
+        }
+        
+        emit BulkBatchCreated(batchId, msg.sender, amounts.length, totalAmount);
+        emit BulkBatchProcessed(batchId, amounts.length, 0);
+        
+        return (batchId, paymentIds);
+    }
+    
+    function bulkPayMultipleMerchants(
+        BulkPaymentRequest[] calldata requests
+    ) external nonReentrant returns (uint256 batchId, uint256[] memory paymentIds) {
+        if (requests.length == 0 || requests.length > MAX_BULK_PAYMENTS) revert InvalidCount();
+        
+        uint256 totalAmount = 0;
+        uint256 totalFees = 0;
+
+        for (uint256 i = 0; i < requests.length; i++) {
+            if (requests[i].merchant == address(0)) revert InvalidMerchant();
+            if (requests[i].amount == 0) revert InvalidAmount();
+
+            totalAmount += requests[i].amount;
+            totalFees += (requests[i].amount * PLATFORM_FEE_BPS) / MAX_FEE_BPS;
+        }
+
+        if (!pyusd.transferFrom(msg.sender, address(this), totalAmount)) revert TransferFailed();
+
+        _bulkBatchIds.increment();
+        batchId = _bulkBatchIds.current();
+
+        paymentIds = new uint256[](requests.length);
+        MerchantTotal[] memory merchantTotals = new MerchantTotal[](requests.length);
+        uint256 merchantCount = 0;
+
+        for (uint256 i = 0; i < requests.length; i++) {
+            _paymentIds.increment();
+            uint256 paymentId = _paymentIds.current();
+            paymentIds[i] = paymentId;
+
+            uint256 platformFee = (requests[i].amount * PLATFORM_FEE_BPS) / MAX_FEE_BPS;
+            uint256 netAmount = requests[i].amount - platformFee;
+
+            string memory sessionId = string(abi.encodePacked("bulk-multi-", batchId, "-", i));
+
+            Payment storage payment = payments[paymentId];
+            payment.id = paymentId;
+            payment.merchant = requests[i].merchant;
+            payment.customer = msg.sender;
+            payment.amount = requests[i].amount;
+            payment.platformFee = platformFee;
+            payment.netAmount = netAmount;
+            payment.sessionId = sessionId;
+            payment.description = requests[i].description;
+            payment.status = PaymentStatus.Paid;
+            payment.paymentType = PaymentType.Bulk;
+            payment.createdAt = block.timestamp;
+            payment.paidAt = block.timestamp;
+            payment.expiresAt = block.timestamp + PAYMENT_EXPIRY;
+            payment.bulkBatchId = batchId;
+            payment.isOneTime = true;
+
+            sessionToPayment[sessionId] = paymentId;
+            merchantPayments[requests[i].merchant].push(paymentId);
+            customerPayments[msg.sender].push(paymentId);
+
+            bool found = false;
+            for (uint256 j = 0; j < merchantCount; j++) {
+                if (merchantTotals[j].merchant == requests[i].merchant) {
+                    merchantTotals[j].amount += netAmount;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                merchantTotals[merchantCount] = MerchantTotal({
+                    merchant: requests[i].merchant,
+                    amount: netAmount
+                });
+                merchantCount++;
+            }
+
+            emit PaymentCreated(paymentId, requests[i].merchant, sessionId, requests[i].amount, PaymentType.Bulk);
+            emit PaymentProcessed(paymentId, msg.sender, requests[i].amount, platformFee);
+        }
+
+        for (uint256 i = 0; i < merchantCount; i++) {
+            if (merchantTotals[i].amount > 0) {
+                if (!pyusd.transfer(merchantTotals[i].merchant, merchantTotals[i].amount)) revert TransferFailed();
+                merchantEarnings[merchantTotals[i].merchant] += merchantTotals[i].amount;
+            }
+        }
+
+        if (totalFees > 0) {
+            if (!pyusd.transfer(treasury, totalFees)) revert TransferFailed();
+        }
+
+        uint256 credits = totalAmount / 1e6;
+        if (credits > 0) {
+            spinCredits[msg.sender] += credits;
+            loyaltyPoints[msg.sender] += credits;
+            emit SpinCreditsAdded(msg.sender, credits);
+        }
+
+        bulkBatches[batchId] = BulkBatch({
+            id: batchId,
+            customer: msg.sender,
+            totalAmount: totalAmount,
+            totalFees: totalFees,
+            paymentIds: paymentIds,
+            createdAt: block.timestamp,
+            processed: true
+        });
+
+        customerBulkBatches[msg.sender].push(batchId);
+
+        emit BulkBatchCreated(batchId, msg.sender, requests.length, totalAmount);
+        emit BulkBatchProcessed(batchId, requests.length, 0);
+
+        return (batchId, paymentIds);
+    }
+    
+    function bulkCreateEscrowPayments(
+        address[] calldata merchants,
+        address[] calldata customers,
+        uint256[] calldata usdAmounts,
+        string[] calldata descriptions,
+        bool autoRelease,
+        bytes[] calldata priceUpdateData
+    ) external payable nonReentrant returns (uint256 batchId, uint256[] memory paymentIds) {
+        if (merchants.length == 0 || merchants.length > MAX_BULK_PAYMENTS) revert InvalidCount();
+        if (
+            merchants.length != customers.length ||
+            merchants.length != usdAmounts.length ||
+            merchants.length != descriptions.length
+        ) revert LengthMismatch();
+        
+        uint256 updateFee = pyth.getUpdateFee(priceUpdateData);
+        if (msg.value < updateFee) revert InsufficientFee();
+        pyth.updatePriceFeeds{value: updateFee}(priceUpdateData);
+        
+        PythStructs.Price memory price = pyth.getPriceUnsafe(PYUSD_USD_PRICE_ID);
+        if (price.price <= 0) revert InvalidPrice();
+        
+        _bulkBatchIds.increment();
+        batchId = _bulkBatchIds.current();
+        
+        paymentIds = new uint256[](merchants.length);
+        uint256 totalAmount = 0;
+        uint256 totalFees = 0;
+        
+        for (uint256 i = 0; i < merchants.length; i++) {
+            if (merchants[i] == address(0)) revert InvalidMerchant();
+            if (customers[i] == address(0)) revert InvalidCustomer();
+            if (usdAmounts[i] == 0) revert InvalidAmount();
+            
+            uint256 pyusdAmount = (usdAmounts[i] * 1e8) / uint256(int256(price.price));
+            uint256 platformFee = (pyusdAmount * PLATFORM_FEE_BPS) / MAX_FEE_BPS;
+            uint256 netAmount = pyusdAmount - platformFee;
+            
+            _paymentIds.increment();
+            uint256 paymentId = _paymentIds.current();
+            paymentIds[i] = paymentId;
+            
+            string memory sessionId = string(abi.encodePacked("bulk-escrow-", batchId, "-", i));
+            
+            Payment storage payment = payments[paymentId];
+            payment.id = paymentId;
+            payment.merchant = merchants[i];
+            payment.customer = customers[i];
+            payment.amount = pyusdAmount;
+            payment.usdAmount = usdAmounts[i];
+            payment.platformFee = platformFee;
+            payment.netAmount = netAmount;
+            payment.sessionId = sessionId;
+            payment.description = descriptions[i];
+            payment.status = PaymentStatus.Created;
+            payment.paymentType = PaymentType.Escrow;
+            payment.createdAt = block.timestamp;
+            payment.expiresAt = block.timestamp + PAYMENT_EXPIRY;
+            payment.releaseTime = block.timestamp + ESCROW_PERIOD;
+            payment.autoRelease = autoRelease;
+            payment.priceAtCreation = price.price;
+            payment.bulkBatchId = batchId;
+            payment.isOneTime = true;
+            
+            sessionToPayment[sessionId] = paymentId;
+            merchantPayments[merchants[i]].push(paymentId);
+            
+            totalAmount += pyusdAmount;
+            totalFees += platformFee;
+            
+            emit PaymentCreated(paymentId, merchants[i], sessionId, pyusdAmount, PaymentType.Escrow);
+        }
+        
+        bulkBatches[batchId] = BulkBatch({
+            id: batchId,
+            customer: msg.sender,
+            totalAmount: totalAmount,
+            totalFees: totalFees,
+            paymentIds: paymentIds,
+            createdAt: block.timestamp,
+            processed: false
+        });
+        
+        customerBulkBatches[msg.sender].push(batchId);
+        
+        emit BulkBatchCreated(batchId, msg.sender, merchants.length, totalAmount);
+        
+        return (batchId, paymentIds);
+    }
+    
+    function processBulkEscrowBatch(uint256 batchId) external nonReentrant {
+        BulkBatch storage batch = bulkBatches[batchId];
+        if (batch.id == 0) revert BatchNotFound();
+        if (batch.processed) revert BatchProcessed();
+        
+        uint256 successCount = 0;
+        uint256 failureCount = 0;
+        
+        for (uint256 i = 0; i < batch.paymentIds.length; i++) {
+            uint256 paymentId = batch.paymentIds[i];
+            Payment storage payment = payments[paymentId];
+            
+            if (payment.status != PaymentStatus.Created) {
+                continue;
+            }
+            
+            if (block.timestamp > payment.expiresAt) {
+                payment.status = PaymentStatus.Expired;
+                failureCount++;
+                emit BulkPaymentFailed(batchId, paymentId, "Expired");
+                continue;
+            }
+            
+            try pyusd.transferFrom(payment.customer, address(this), payment.amount) returns (bool success) {
+                if (success) {
+                    payment.status = PaymentStatus.Escrowed;
+                    payment.paidAt = block.timestamp;
+                    escrowBalances[payment.merchant] += payment.netAmount;
+                    customerPayments[payment.customer].push(paymentId);
+                    
+                    successCount++;
+                    emit PaymentProcessed(paymentId, payment.customer, payment.amount, payment.platformFee);
+                } else {
+                    failureCount++;
+                    emit BulkPaymentFailed(batchId, paymentId, "Failed");
+                }
+            } catch {
+                failureCount++;
+                emit BulkPaymentFailed(batchId, paymentId, "Failed");
+            }
+        }
+        
+        batch.processed = true;
+        emit BulkBatchProcessed(batchId, successCount, failureCount);
+    }
+    
+    function getBulkBatch(uint256 batchId) external view returns (
+        address customer,
+        uint256 totalAmount,
+        uint256 totalFees,
+        uint256 paymentCount,
+        bool processed
+    ) {
+        BulkBatch storage batch = bulkBatches[batchId];
+        return (
+            batch.customer,
+            batch.totalAmount,
+            batch.totalFees,
+            batch.paymentIds.length,
+            batch.processed
+        );
+    }
+    
+    function getBulkBatchPayments(uint256 batchId) external view returns (uint256[] memory) {
+        return bulkBatches[batchId].paymentIds;
+    }
+    
     function createPayment(
         address merchant,
         uint256 amount,
@@ -186,29 +598,26 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         SplitRecipient[] memory splits,
         bool isOneTime
     ) external returns (uint256 paymentId) {
-        require(merchant != address(0), "Invalid merchant");
-        require(amount > 0, "Amount must be > 0");
-        require(bytes(sessionId).length > 0, "Session ID required");
-        require(sessionToPayment[sessionId] == 0, "Session already exists");
+        if (merchant == address(0)) revert InvalidMerchant();
+        if (amount == 0) revert InvalidAmount();
+        if (bytes(sessionId).length == 0) revert InvalidSession();
+        if (sessionToPayment[sessionId] != 0) revert SessionExists();
         
         return _createPayment(
             merchant,
             amount,
-            0, // No USD amount for regular payments
+            0,
             sessionId,
             description,
             referralCode,
             splits,
             isOneTime,
             PaymentType.Regular,
-            false, // No auto release
-            0 // No price
+            false,
+            0
         );
     }
     
-    /**
-     * @notice Create an escrow payment with USD pricing via Pyth
-     */
     function createEscrowPayment(
         address merchant,
         address customer,
@@ -218,18 +627,16 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         bool autoRelease,
         bytes[] calldata priceUpdateData
     ) external payable returns (uint256 paymentId) {
-        require(merchant != address(0), "Invalid merchant");
-        require(customer != address(0), "Invalid customer");
-        require(usdAmount > 0, "Amount must be > 0");
+        if (merchant == address(0)) revert InvalidMerchant();
+        if (customer == address(0)) revert InvalidCustomer();
+        if (usdAmount == 0) revert InvalidAmount();
         
-        // Update price feeds
         uint256 updateFee = pyth.getUpdateFee(priceUpdateData);
-        require(msg.value >= updateFee, "Insufficient fee");
+        if (msg.value < updateFee) revert InsufficientFee();
         pyth.updatePriceFeeds{value: updateFee}(priceUpdateData);
         
-        // Get current price and calculate PYUSD amount
         PythStructs.Price memory price = pyth.getPriceUnsafe(PYUSD_USD_PRICE_ID);
-        require(price.price > 0, "Invalid price");
+        if (price.price <= 0) revert InvalidPrice();
         
         uint256 pyusdAmount = (usdAmount * 1e8) / uint256(int256(price.price));
         
@@ -240,18 +647,15 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
             usdAmount,
             sessionId,
             description,
-            bytes32(0), // No referral for escrow
+            bytes32(0),
             emptySplits,
-            true, // One time
+            true,
             PaymentType.Escrow,
             autoRelease,
             price.price
         );
     }
     
-    /**
-     * @notice Internal function to create payments
-     */
     function _createPayment(
         address merchant,
         uint256 amount,
@@ -299,7 +703,6 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
             payment.releaseTime = block.timestamp + ESCROW_PERIOD;
         }
         
-        // Store splits
         for (uint256 i = 0; i < splits.length; i++) {
             payment.splits.push(splits[i]);
         }
@@ -312,36 +715,30 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         return paymentId;
     }
     
-    /**
-     * @notice Process a payment
-     */
     function processPayment(uint256 paymentId) external nonReentrant {
         Payment storage payment = payments[paymentId];
         
-        require(payment.id != 0, "Payment not found");
-        require(payment.status == PaymentStatus.Created, "Payment not available");
-        require(block.timestamp <= payment.expiresAt, "Payment expired");
-        require(!payment.isOneTime || payment.customer == address(0), "One-time payment already used");
+        if (payment.id == 0) revert PaymentNotFound();
+        if (payment.status != PaymentStatus.Created) revert PaymentNotAvailable();
+        if (block.timestamp > payment.expiresAt) revert PaymentExpired();
+        if (payment.isOneTime && payment.customer != address(0)) revert OneTimeUsed();
         
         payment.customer = msg.sender;
         payment.paidAt = block.timestamp;
         customerPayments[msg.sender].push(paymentId);
         
-        // Transfer PYUSD from customer
-        require(pyusd.transferFrom(msg.sender, address(this), payment.amount), "Transfer failed");
+        if (!pyusd.transferFrom(msg.sender, address(this), payment.amount)) revert TransferFailed();
         
         if (payment.paymentType == PaymentType.Escrow) {
             payment.status = PaymentStatus.Escrowed;
             escrowBalances[payment.merchant] += payment.netAmount;
         } else {
             payment.status = PaymentStatus.Paid;
-            _distributePayment(paymentId, payment);
+            _distributePayment(payment);
         }
         
-        // Handle affiliate rewards
         _processAffiliate(payment);
         
-        // Add spin credits (1 credit per $1 paid)
         uint256 credits = payment.amount / 1e6;
         if (credits > 0) {
             spinCredits[msg.sender] += credits;
@@ -349,67 +746,40 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
             emit SpinCreditsAdded(msg.sender, credits);
         }
         
-        // Mint NFT receipt
         _mintNFTReceipt(paymentId, payment);
         
         emit PaymentProcessed(paymentId, msg.sender, payment.amount, payment.platformFee);
     }
     
-    /**
-     * @notice Distribute payment to merchant/splits
-     */
-    function _distributePayment(uint256 paymentId, Payment storage payment) internal {
-        // Platform fee to treasury (minus affiliate reward)
-        uint256 affiliateReward = 0;
-        if (payment.affiliate != address(0)) {
-            affiliateReward = (payment.platformFee * AFFILIATE_REWARD_BPS) / MAX_FEE_BPS;
-            affiliateEarnings[payment.affiliate] += affiliateReward;
-        }
-        
-        uint256 treasuryFee = payment.platformFee - affiliateReward;
-        if (treasuryFee > 0) {
-            require(pyusd.transfer(treasury, treasuryFee), "Treasury transfer failed");
-        }
-        
-        // Process splits or direct payment
-        if (payment.splits.length > 0) {
-            _processSplitPayment(paymentId, payment);
-        } else {
-            require(pyusd.transfer(payment.merchant, payment.netAmount), "Merchant transfer failed");
-            merchantEarnings[payment.merchant] += payment.netAmount;
-        }
-    }
-    
-
-  /**
-    * @notice Process split payments
-    */
-    function _processSplitPayment(uint256 paymentId, Payment storage payment) internal {
-        // Explicitly mark as used to silence warning
-        paymentId;
-
-        uint256 remainingAmount = payment.netAmount;
-        
+    function _distributePayment(Payment storage payment) internal {
+        // Convert splits to PaymentLib format
+        PaymentLib.SplitRecipient[] memory libSplits = new PaymentLib.SplitRecipient[](payment.splits.length);
         for (uint256 i = 0; i < payment.splits.length; i++) {
-            uint256 splitAmount = (payment.netAmount * payment.splits[i].bps) / MAX_FEE_BPS;
-            
-            if (splitAmount > 0 && splitAmount <= remainingAmount) {
-                require(pyusd.transfer(payment.splits[i].recipient, splitAmount), "Split transfer failed");
-                remainingAmount -= splitAmount;
-            }
+            libSplits[i] = PaymentLib.SplitRecipient({
+                recipient: payment.splits[i].recipient,
+                bps: payment.splits[i].bps
+            });
         }
-        
-        // Send remaining to merchant
-        if (remainingAmount > 0) {
-            require(pyusd.transfer(payment.merchant, remainingAmount), "Merchant transfer failed");
-            merchantEarnings[payment.merchant] += remainingAmount;
-        }
-    }
 
+        // Distribute funds using PaymentLib
+        PaymentLib.distributePayment(
+            pyusd,
+            treasury,
+            payment.affiliate,
+            payment.merchant,
+            payment.netAmount,
+            payment.platformFee,
+            AFFILIATE_REWARD_BPS,
+            MAX_FEE_BPS,
+            libSplits,
+            merchantEarnings,
+            affiliateEarnings
+        );
+
+        // Update merchant earnings (already handled in PaymentLib, but just in case)
+        merchantEarnings[payment.merchant] += payment.netAmount;
+    }
     
-    /**
-     * @notice Process affiliate rewards
-     */
     function _processAffiliate(Payment storage payment) internal {
         if (payment.affiliate != address(0)) {
             uint256 affiliateId = walletToAffiliate[payment.affiliate];
@@ -418,7 +788,6 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
                 aff.totalReferrals++;
                 aff.totalVolume += payment.amount;
                 
-                // Set customer's affiliate (first referral wins)
                 if (customerToAffiliate[payment.customer] == address(0)) {
                     customerToAffiliate[payment.customer] = payment.affiliate;
                 }
@@ -428,9 +797,6 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         }
     }
     
-    /**
-     * @notice Mint NFT receipt for payment
-     */
     function _mintNFTReceipt(uint256 paymentId, Payment storage payment) internal {
         if (address(nftReceipt) != address(0)) {
             try nftReceipt.mintReceipt(
@@ -440,56 +806,40 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
                 payment.amount,
                 payment.description,
                 payment.txHash,
-                "PyLinks Merchant" // Default merchant name
+                "PyLinks Merchant"
             ) returns (uint256 tokenId) {
                 emit NFTReceiptMinted(paymentId, tokenId, payment.customer);
-            } catch {
-                // NFT minting failed, continue without it
-            }
+            } catch {}
         }
     }
     
-    // ============ ESCROW FUNCTIONS ============
-    
-    /**
-     * @notice Release escrowed payment to merchant
-     */
     function releaseEscrowPayment(uint256 paymentId) external {
         Payment storage payment = payments[paymentId];
         
-        require(payment.status == PaymentStatus.Escrowed, "Payment not escrowed");
-        require(
-            msg.sender == payment.customer || 
-            (payment.autoRelease && block.timestamp >= payment.releaseTime),
-            "Not authorized to release"
-        );
+        if (payment.status != PaymentStatus.Escrowed) revert NotEscrowed();
+        if (
+            msg.sender != payment.customer && 
+            !(payment.autoRelease && block.timestamp >= payment.releaseTime)
+        ) revert NotAuthorized();
         
         payment.status = PaymentStatus.Paid;
         escrowBalances[payment.merchant] -= payment.netAmount;
         
-        _distributePayment(paymentId, payment);
+        _distributePayment(payment);
         
         emit EscrowReleased(paymentId, payment.merchant);
     }
     
-    /**
-     * @notice Dispute an escrowed payment
-     */
     function disputeEscrowPayment(uint256 paymentId) external {
         Payment storage payment = payments[paymentId];
         
-        require(payment.status == PaymentStatus.Escrowed, "Payment not escrowed");
-        require(msg.sender == payment.customer, "Only customer can dispute");
+        if (payment.status != PaymentStatus.Escrowed) revert NotEscrowed();
+        if (msg.sender != payment.customer) revert NotAuthorized();
         
         payment.status = PaymentStatus.Disputed;
         emit PaymentDisputed(paymentId);
     }
     
-    // ============ SUBSCRIPTION FUNCTIONS ============
-    
-    /**
-     * @notice Create a subscription
-     */
     function createSubscription(
         address merchant,
         uint256 usdAmount,
@@ -498,9 +848,9 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         string memory description,
         bool autoRenew
     ) external returns (uint256 subscriptionId) {
-        require(merchant != address(0), "Invalid merchant");
-        require(usdAmount > 0, "Amount must be > 0");
-        require(interval > 0, "Invalid interval");
+        if (merchant == address(0)) revert InvalidMerchant();
+        if (usdAmount == 0) revert InvalidAmount();
+        if (interval == 0) revert InvalidInterval();
         
         _subscriptionIds.increment();
         subscriptionId = _subscriptionIds.current();
@@ -528,44 +878,35 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         return subscriptionId;
     }
     
-    /**
-     * @notice Process subscription payment
-     */
     function processSubscriptionPayment(
         uint256 subscriptionId,
         bytes[] calldata priceUpdateData
     ) external payable nonReentrant {
         Subscription storage sub = subscriptions[subscriptionId];
         
-        require(sub.status == SubscriptionStatus.Active, "Subscription not active");
-        require(block.timestamp >= sub.nextPayment, "Payment not due");
-        require(sub.maxPayments == 0 || sub.totalPayments < sub.maxPayments, "Subscription completed");
+        if (sub.status != SubscriptionStatus.Active) revert NotActive();
+        if (block.timestamp < sub.nextPayment) revert PaymentNotDue();
+        if (sub.maxPayments > 0 && sub.totalPayments >= sub.maxPayments) revert SubscriptionCompleted();
         
-        // Update price feeds
         uint256 updateFee = pyth.getUpdateFee(priceUpdateData);
-        require(msg.value >= updateFee, "Insufficient fee");
+        if (msg.value < updateFee) revert InsufficientFee();
         pyth.updatePriceFeeds{value: updateFee}(priceUpdateData);
         
-        // Get current price and calculate PYUSD amount
         PythStructs.Price memory price = pyth.getPriceUnsafe(PYUSD_USD_PRICE_ID);
-        require(price.price > 0, "Invalid price");
+        if (price.price <= 0) revert InvalidPrice();
         
         uint256 pyusdAmount = (sub.usdAmount * 1e8) / uint256(int256(price.price));
-        
-        // Calculate fees
         uint256 platformFee = (pyusdAmount * PLATFORM_FEE_BPS) / MAX_FEE_BPS;
         uint256 merchantAmount = pyusdAmount - platformFee;
         
-        // Transfer PYUSD from customer
-        require(pyusd.transferFrom(sub.customer, address(this), pyusdAmount), "Transfer failed");
+        if (!pyusd.transferFrom(sub.customer, address(this), pyusdAmount)) revert TransferFailed();
         
-        // Distribute payments
         if (platformFee > 0) {
-            require(pyusd.transfer(treasury, platformFee), "Fee transfer failed");
+            if (!pyusd.transfer(treasury, platformFee)) revert TransferFailed();
         }
-        require(pyusd.transfer(sub.merchant, merchantAmount), "Merchant transfer failed");
         
-        // Update subscription
+        if (!pyusd.transfer(sub.merchant, merchantAmount)) revert TransferFailed();
+        
         sub.totalPayments++;
         sub.nextPayment = block.timestamp + sub.interval;
         
@@ -578,20 +919,15 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         emit SubscriptionPayment(subscriptionId, pyusdAmount, sub.nextPayment);
     }
     
-    // ============ AFFILIATE FUNCTIONS ============
-    
-    /**
-     * @notice Register as an affiliate
-     */
     function registerAffiliate(
         string memory name,
         string memory preferredCode
     ) external returns (uint256 affiliateId) {
-        require(walletToAffiliate[msg.sender] == 0, "Already registered");
-        require(bytes(name).length > 0, "Name required");
+        if (walletToAffiliate[msg.sender] != 0) revert AlreadyRegistered();
+        if (bytes(name).length == 0) revert NameRequired();
         
         bytes32 referralCode = keccak256(abi.encodePacked(preferredCode, msg.sender));
-        require(codeToWallet[referralCode] == address(0), "Code already exists");
+        if (codeToWallet[referralCode] != address(0)) revert CodeExists();
         
         _affiliateIds.increment();
         affiliateId = _affiliateIds.current();
@@ -604,7 +940,7 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
             totalReferrals: 0,
             totalVolume: 0,
             totalEarnings: 0,
-            tier: 1, // Bronze
+            tier: 1,
             isActive: true,
             createdAt: block.timestamp
         });
@@ -617,18 +953,13 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         return affiliateId;
     }
     
-    /**
-     * @notice Withdraw affiliate earnings
-     */
     function withdrawAffiliateEarnings() external nonReentrant {
         uint256 earnings = affiliateEarnings[msg.sender];
-        require(earnings > 0, "No earnings to withdraw");
+        if (earnings == 0) revert NoEarnings();
         
         affiliateEarnings[msg.sender] = 0;
-        require(pyusd.transfer(msg.sender, earnings), "Transfer failed");
+        if (!pyusd.transfer(msg.sender, earnings)) revert TransferFailed();
     }
-    
-    // ============ VIEW FUNCTIONS ============
     
     function getPayment(uint256 paymentId) external view returns (
         address merchant,
@@ -694,10 +1025,8 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
         );
     }
     
-    // ============ ADMIN FUNCTIONS ============
-    
     function updateTreasury(address newTreasury) external onlyOwner {
-        require(newTreasury != address(0), "Invalid treasury");
+        if (newTreasury == address(0)) revert InvalidTreasury();
         treasury = newTreasury;
     }
     
@@ -707,6 +1036,6 @@ contract PyLinksCore is ReentrancyGuard, Ownable {
     
     function emergencyWithdraw() external onlyOwner {
         uint256 balance = pyusd.balanceOf(address(this));
-        require(pyusd.transfer(owner(), balance), "Transfer failed");
+        if (!pyusd.transfer(owner(), balance)) revert TransferFailed();
     }
 }
