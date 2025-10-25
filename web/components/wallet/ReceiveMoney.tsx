@@ -2,21 +2,27 @@
 
 import { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { 
-  QrCode, 
-  Copy, 
-  Share, 
-  Download, 
-  Wallet, 
+import {
+  QrCode,
+  Copy,
+  Share,
+  Download,
+  Wallet,
   DollarSign,
   Clock,
   CheckCircle,
-  ExternalLink
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -45,7 +51,8 @@ interface PendingPayment {
 
 export default function ReceiveMoney() {
   const { user } = usePrivy();
-  const { createPayment, getCustomerPayments, getPayment, loading } = usePyLinksCore();
+  const { createPayment, getCustomerPayments, getPayment, loading } =
+    usePyLinksCore();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [paymentRequest, setPaymentRequest] = useState<string>("");
@@ -86,34 +93,36 @@ export default function ReceiveMoney() {
     }
 
     try {
-      const sessionId = `request_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
+      const sessionId = `request_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
       const request = {
         merchant: user.wallet.address,
         amount: amount,
         sessionId: sessionId,
         description: description,
         splits: [],
-        isOneTime: true
+        isOneTime: true,
       };
 
       const txHash = await createPayment(request);
-      
+
       if (txHash) {
         const paymentUrl = `${window.location.origin}/pay?session=${sessionId}`;
         setPaymentRequest(paymentUrl);
-        
+
         // Generate QR code
         const qrCode = await QRCodeLib.toDataURL(paymentUrl, {
           width: 256,
           margin: 2,
           color: {
-            dark: '#000000',
-            light: '#FFFFFF'
-          }
+            dark: "#000000",
+            light: "#FFFFFF",
+          },
         });
         setQrCodeUrl(qrCode);
-        
+
         toast.success("Payment request created successfully!");
       }
     } catch (error) {
@@ -137,7 +146,7 @@ export default function ReceiveMoney() {
     if (navigator.share && paymentRequest) {
       try {
         await navigator.share({
-          title: 'PyLinks Payment Request',
+          title: "PyLinks Payment Request",
           text: `Please pay ${amount} PYUSD for: ${description}`,
           url: paymentRequest,
         });
@@ -152,7 +161,7 @@ export default function ReceiveMoney() {
 
   const downloadQRCode = () => {
     if (qrCodeUrl) {
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.download = `pylinks-payment-request-${Date.now()}.png`;
       link.href = qrCodeUrl;
       link.click();
@@ -167,12 +176,12 @@ export default function ReceiveMoney() {
   const getTimeRemaining = (expiresAt: number) => {
     const now = Date.now() / 1000;
     const diff = expiresAt - now;
-    
+
     if (diff <= 0) return "Expired";
-    
+
     const minutes = Math.floor(diff / 60);
     const seconds = Math.floor(diff % 60);
-    
+
     return `${minutes}m ${seconds}s`;
   };
 
@@ -188,8 +197,9 @@ export default function ReceiveMoney() {
       <Alert>
         <Wallet className="h-4 w-4" />
         <AlertDescription>
-          Generate payment requests with QR codes for easy sharing, or share your wallet address 
-          for direct transfers. All payments are secured by smart contracts.
+          Generate payment requests with QR codes for easy sharing, or share
+          your wallet address for direct transfers. All payments are secured by
+          smart contracts.
         </AlertDescription>
       </Alert>
 
@@ -228,7 +238,10 @@ export default function ReceiveMoney() {
                   <Label>You'll Receive</Label>
                   <div className="p-2 bg-muted rounded-md">
                     <span className="font-mono">
-                      {amount ? (parseFloat(amount) - calculateFee()).toFixed(6) : "0.000000"} PYUSD
+                      {amount
+                        ? (parseFloat(amount) - calculateFee()).toFixed(6)
+                        : "0.00"}{" "}
+                      PYUSD
                     </span>
                   </div>
                 </div>
@@ -249,16 +262,22 @@ export default function ReceiveMoney() {
                 <div className="bg-muted p-4 rounded-lg space-y-2">
                   <div className="flex justify-between">
                     <span>Requested Amount:</span>
-                    <span className="font-mono">{parseFloat(amount).toFixed(6)} PYUSD</span>
+                    <span className="font-mono">
+                      {parseFloat(amount).toFixed(6)} PYUSD
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Platform Fee (0.1%):</span>
-                    <span className="font-mono">{calculateFee().toFixed(6)} PYUSD</span>
+                    <span className="font-mono">
+                      {calculateFee().toFixed(6)} PYUSD
+                    </span>
                   </div>
                   <Separator />
                   <div className="flex justify-between font-semibold">
                     <span>You'll Receive:</span>
-                    <span className="font-mono">{(parseFloat(amount) - calculateFee()).toFixed(6)} PYUSD</span>
+                    <span className="font-mono">
+                      {(parseFloat(amount) - calculateFee()).toFixed(6)} PYUSD
+                    </span>
                   </div>
                 </div>
               )}
@@ -281,7 +300,9 @@ export default function ReceiveMoney() {
               {paymentRequest && (
                 <Card className="bg-green-50 border-green-200">
                   <CardHeader>
-                    <CardTitle className="text-green-800">Payment Request Created!</CardTitle>
+                    <CardTitle className="text-green-800">
+                      Payment Request Created!
+                    </CardTitle>
                     <CardDescription className="text-green-600">
                       Share this with the payer
                     </CardDescription>
@@ -290,15 +311,21 @@ export default function ReceiveMoney() {
                     {qrCodeUrl && (
                       <div className="flex justify-center">
                         <div className="p-4 bg-white rounded-lg border">
-                          <img src={qrCodeUrl} alt="Payment QR Code" className="w-48 h-48" />
+                          <img
+                            src={qrCodeUrl}
+                            alt="Payment QR Code"
+                            className="w-48 h-48"
+                          />
                         </div>
                       </div>
                     )}
-                    
+
                     <div className="p-3 bg-white border rounded-lg">
-                      <p className="text-sm font-mono break-all">{paymentRequest}</p>
+                      <p className="text-sm font-mono break-all">
+                        {paymentRequest}
+                      </p>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-2">
                       <Button onClick={copyPaymentRequest} variant="outline">
                         <Copy className="h-4 w-4 mr-2" />
@@ -314,8 +341,10 @@ export default function ReceiveMoney() {
                             <Download className="h-4 w-4 mr-2" />
                             Download QR
                           </Button>
-                          <Button 
-                            onClick={() => window.open(paymentRequest, '_blank')} 
+                          <Button
+                            onClick={() =>
+                              window.open(paymentRequest, "_blank")
+                            }
                             variant="outline"
                           >
                             <ExternalLink className="h-4 w-4 mr-2" />
@@ -324,11 +353,12 @@ export default function ReceiveMoney() {
                         </>
                       )}
                     </div>
-                    
+
                     <Alert>
                       <Clock className="h-4 w-4" />
                       <AlertDescription>
-                        This payment request will expire in 10 minutes. The payer must complete it before then.
+                        This payment request will expire in 10 minutes. The
+                        payer must complete it before then.
                       </AlertDescription>
                     </Alert>
                   </CardContent>
@@ -358,7 +388,11 @@ export default function ReceiveMoney() {
                     readOnly
                     className="font-mono"
                   />
-                  <Button onClick={copyWalletAddress} variant="outline" size="icon">
+                  <Button
+                    onClick={copyWalletAddress}
+                    variant="outline"
+                    size="icon"
+                  >
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
@@ -367,8 +401,9 @@ export default function ReceiveMoney() {
               <Alert>
                 <DollarSign className="h-4 w-4" />
                 <AlertDescription>
-                  Anyone can send PYUSD directly to this address. Direct transfers bypass 
-                  the payment system and don't include platform fees or expiration times.
+                  Anyone can send PYUSD directly to this address. Direct
+                  transfers bypass the payment system and don't include platform
+                  fees or expiration times.
                 </AlertDescription>
               </Alert>
 
@@ -404,7 +439,9 @@ export default function ReceiveMoney() {
               {pendingPayments.length === 0 ? (
                 <div className="text-center py-12">
                   <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No pending payment requests</p>
+                  <p className="text-muted-foreground">
+                    No pending payment requests
+                  </p>
                   <p className="text-sm text-muted-foreground mt-2">
                     Create a payment request to get started
                   </p>

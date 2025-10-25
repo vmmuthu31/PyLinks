@@ -41,8 +41,8 @@ export default function WalletOverview() {
     getLoyaltyPoints,
   } = usePyLinksCore();
   const [showBalance, setShowBalance] = useState(true);
-  const [balance, setBalance] = useState("0.000000");
-  const [earnings, setEarnings] = useState("0.000000");
+  const [balance, setBalance] = useState("0.00");
+  const [earnings, setEarnings] = useState("0.00");
   const [totalPayments, setTotalPayments] = useState(0);
   const [spinCredits, setSpinCredits] = useState("0");
   const [loyaltyPoints, setLoyaltyPoints] = useState("0");
