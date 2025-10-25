@@ -12,6 +12,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
+import { usePyLinksPayment } from "@/hooks/useWalletTransaction";
+import { openTransaction } from "@/lib/utils/blockscout";
 import { toast } from "sonner";
 import { BulkPaymentRequest } from "@/lib/contracts/pylinks-core";
 
@@ -23,11 +25,13 @@ interface PaymentRequest {
 }
 
 export default function BulkPayMultipleMerchants() {
-  const { bulkPayMultipleMerchants, loading } = usePyLinksCore();
+  const { sendDirectPayment, loading: paymentLoading } = usePyLinksPayment();
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([
     { id: "1", merchant: "", amount: "", description: "" }
   ]);
   const [csvData, setCsvData] = useState("");
+  const [txHashes, setTxHashes] = useState<{hash: string, merchant: string, description: string}[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const addPaymentRequest = () => {
     const newId = (paymentRequests.length + 1).toString();
@@ -113,22 +117,55 @@ export default function BulkPayMultipleMerchants() {
     }
 
     try {
-      const requests: BulkPaymentRequest[] = validRequests.map(req => ({
-        merchant: req.merchant,
-        amount: req.amount,
-        description: req.description
-      }));
+      setIsProcessing(true);
+      const completedTxHashes: {hash: string, merchant: string, description: string}[] = [];
 
-      const result = await bulkPayMultipleMerchants(requests);
+      toast.success(`Processing ${validRequests.length} payments to multiple merchants...`);
+
+      // Process each payment individually
+      for (let i = 0; i < validRequests.length; i++) {
+        const req = validRequests[i];
+        
+        try {
+          toast.success(`Processing payment ${i + 1}/${validRequests.length}: ${req.description}`);
+          
+          const result = await sendDirectPayment(
+            req.merchant,
+            req.amount,
+            req.description
+          );
+          
+          completedTxHashes.push({
+            hash: result.hash,
+            merchant: req.merchant,
+            description: req.description
+          });
+          toast.success(`Payment ${i + 1} completed! Hash: ${result.hash.slice(0, 10)}...`);
+          
+        } catch (paymentError) {
+          console.error(`Payment ${i + 1} failed:`, paymentError);
+          toast.error(`Payment ${i + 1} failed: ${req.description}`);
+          // Continue with other payments
+        }
+      }
+
+      setTxHashes(completedTxHashes);
       
-      if (result) {
-        toast.success(`Bulk payment batch created! Batch ID: ${result.batchId}`);
-        // Reset form
+      if (completedTxHashes.length > 0) {
+        toast.success(`Bulk payment completed! ${completedTxHashes.length}/${validRequests.length} payments successful`);
+        
+        // Reset form on success
         setPaymentRequests([{ id: "1", merchant: "", amount: "", description: "" }]);
         setCsvData("");
+      } else {
+        toast.error("All payments failed. Please try again.");
       }
+      
     } catch (error) {
       console.error("Bulk payment error:", error);
+      toast.error("Bulk payment process failed");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -306,13 +343,49 @@ export default function BulkPayMultipleMerchants() {
         </CardContent>
       </Card>
 
+      {/* Transaction Results */}
+      {txHashes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Transaction Results</CardTitle>
+            <CardDescription>
+              {txHashes.length} successful payments to multiple merchants
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {txHashes.map((tx, index) => (
+              <div key={tx.hash} className="flex items-center justify-between p-2 bg-green-50 rounded">
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{tx.description}</div>
+                  <div className="text-xs text-gray-500">
+                    To: {tx.merchant.slice(0, 10)}...{tx.merchant.slice(-8)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="text-xs bg-white px-2 py-1 rounded border">
+                    {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openTransaction(tx.hash)}
+                  >
+                    View
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex gap-4">
         <Button
           onClick={handleSubmit}
-          disabled={!isFormValid() || loading}
+          disabled={!isFormValid() || isProcessing || paymentLoading}
           className="flex-1"
         >
-          {loading ? (
+          {(isProcessing || paymentLoading) ? (
             <>Processing...</>
           ) : (
             <>

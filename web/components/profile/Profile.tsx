@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import WalletBalance from "@/components/wallet/WalletBalance";
 import { toast } from "sonner";
 
 export default function Profile() {
@@ -346,6 +347,9 @@ export default function Profile() {
             </CardContent>
           </Card>
 
+          {/* Wallet Balance */}
+          <WalletBalance />
+
           {/* Quick Actions */}
           <Card>
             <CardHeader>
@@ -358,7 +362,7 @@ export default function Profile() {
                 className="w-full justify-start"
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
-                View on Etherscan
+                View on Blockscout
               </Button>
               <Button
                 variant="outline"

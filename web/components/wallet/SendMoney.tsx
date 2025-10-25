@@ -13,17 +13,21 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
+import { usePyLinksPayment } from "@/hooks/useWalletTransaction";
+import { openTransaction } from "@/lib/utils/blockscout";
 import { toast } from "sonner";
 import { PyLinksCoreService } from "@/lib/contracts/pylinks-core";
 
 export default function SendMoney() {
   const { createPayment, loading } = usePyLinksCore();
+  const { sendDirectPayment, loading: paymentLoading } = usePyLinksPayment();
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [isOneTime, setIsOneTime] = useState(true);
   const [referralCode, setReferralCode] = useState("");
   const [paymentLink, setPaymentLink] = useState("");
+  const [directTxHash, setDirectTxHash] = useState<string | null>(null);
 
   const handleDirectSend = async () => {
     if (!recipient || !amount || !description) {
@@ -37,28 +41,21 @@ export default function SendMoney() {
     }
 
     try {
-      const sessionId = `direct_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Use direct payment hook for immediate PYUSD transfer
+      const result = await sendDirectPayment(
+        recipient,
+        amount,
+        description
+      );
       
-      const request = {
-        merchant: recipient,
-        amount: amount,
-        sessionId: sessionId,
-        description: description,
-        referralCode: referralCode || undefined,
-        splits: [],
-        isOneTime: isOneTime
-      };
-
-      const txHash = await createPayment(request);
+      setDirectTxHash(result.hash);
+      toast.success("Payment sent successfully!");
       
-      if (txHash) {
-        toast.success("Payment sent successfully!");
-        // Reset form
-        setRecipient("");
-        setAmount("");
-        setDescription("");
-        setReferralCode("");
-      }
+      // Reset form
+      setRecipient("");
+      setAmount("");
+      setDescription("");
+      setReferralCode("");
     } catch (error) {
       console.error("Send money error:", error);
     }
@@ -223,10 +220,10 @@ export default function SendMoney() {
 
               <Button
                 onClick={handleDirectSend}
-                disabled={!recipient || !amount || !description || loading}
+                disabled={!recipient || !amount || !description || paymentLoading}
                 className="w-full"
               >
-                {loading ? (
+                {paymentLoading ? (
                   <>Processing...</>
                 ) : (
                   <>
@@ -235,6 +232,35 @@ export default function SendMoney() {
                   </>
                 )}
               </Button>
+
+              {/* Transaction Result */}
+              {directTxHash && (
+                <Card className="bg-green-50 border-green-200">
+                  <CardHeader>
+                    <CardTitle className="text-green-800">Payment Sent!</CardTitle>
+                    <CardDescription className="text-green-600">
+                      Your payment has been processed successfully
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-2 bg-white rounded">
+                      <span className="text-sm">Transaction Hash:</span>
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                          {directTxHash.slice(0, 10)}...{directTxHash.slice(-8)}
+                        </code>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openTransaction(directTxHash)}
+                        >
+                          View
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

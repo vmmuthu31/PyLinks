@@ -42,6 +42,7 @@ import {
 import { addPayment } from "@/lib/store/slices/paymentSlice";
 import axios from "axios";
 import QRCode from "react-qr-code";
+import WalletBalance from "@/components/wallet/WalletBalance";
 import { toast } from "sonner";
 
 export default function DashboardMain() {
@@ -56,8 +57,6 @@ export default function DashboardMain() {
   const [memo, setMemo] = useState("");
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
-  const [balances, setBalances] = useState({ eth: "0", pyusd: "0" });
-  const [loadingBalances, setLoadingBalances] = useState(false);
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>(
     {}
   );
@@ -69,56 +68,6 @@ export default function DashboardMain() {
     }
   }, [merchant, dispatch]);
 
-  // Fetch wallet balances when wallet is connected
-  useEffect(() => {
-    if (merchant?.walletAddress) {
-      fetchWalletBalances();
-    }
-  }, [merchant?.walletAddress]);
-
-  const fetchWalletBalances = async () => {
-    if (!merchant?.walletAddress) return;
-
-    try {
-      setLoadingBalances(true);
-
-      // Connect to Sepolia testnet
-      const provider = new ethers.providers.JsonRpcProvider(
-        "https://ethereum-sepolia-rpc.publicnode.com"
-      );
-
-      // Get ETH balance
-      const ethBalance = await provider.getBalance(merchant.walletAddress);
-      const ethFormatted = ethers.utils.formatEther(ethBalance);
-
-      // PYUSD contract on Sepolia
-      const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9";
-      const PYUSD_ABI = [
-        "function balanceOf(address owner) view returns (uint256)",
-        "function decimals() view returns (uint8)",
-      ];
-
-      const pyusdContract = new ethers.Contract(
-        PYUSD_ADDRESS,
-        PYUSD_ABI,
-        provider
-      );
-      const pyusdBalance = await pyusdContract.balanceOf(
-        merchant.walletAddress
-      );
-      const pyusdFormatted = ethers.utils.formatUnits(pyusdBalance, 6); // PYUSD has 6 decimals
-
-      setBalances({
-        eth: parseFloat(ethFormatted).toFixed(4),
-        pyusd: parseFloat(pyusdFormatted).toFixed(2),
-      });
-    } catch (error) {
-      console.error("Error fetching balances:", error);
-      toast.error("Failed to fetch wallet balances");
-    } finally {
-      setLoadingBalances(false);
-    }
-  };
 
   const handleWalletConnect = async () => {
     try {
@@ -374,132 +323,8 @@ export default function DashboardMain() {
               </CardContent>
             </Card>
 
-            {/* Wallet Information Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wallet className="h-5 w-5" />
-                  Wallet Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {merchant.walletAddress ? (
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">
-                        Wallet Address
-                      </Label>
-                      <div className="flex items-center gap-1 mt-1">
-                        <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono flex-1">
-                          {merchant.walletAddress}
-                        </code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            merchant.walletAddress &&
-                            copyToClipboard(
-                              merchant.walletAddress,
-                              "Wallet Address",
-                              "walletAddress"
-                            )
-                          }
-                          className="h-7 w-7 p-0"
-                        >
-                          {copiedStates.walletAddress ? (
-                            <Check className="h-3 w-3 text-green-600" />
-                          ) : (
-                            <Copy className="h-3 w-3" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">
-                        Network
-                      </Label>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="text-xs">
-                          Ethereum Sepolia
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">
-                        Balances
-                      </Label>
-                      {loadingBalances ? (
-                        <div className="flex items-center gap-2 mt-1">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span className="text-sm text-gray-600">
-                            Loading balances...
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 mt-1">
-                          <div className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <span className="text-sm font-medium">ETH</span>
-                            </div>
-                            <span className="text-sm font-mono">
-                              {balances.eth}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-sm font-medium">PYUSD</span>
-                            </div>
-                            <span className="text-sm font-mono">
-                              {balances.pyusd}
-                            </span>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={fetchWalletBalances}
-                            className="w-full mt-2"
-                            disabled={loadingBalances}
-                          >
-                            <RefreshCw className="h-3 w-3 mr-2" />
-                            Refresh Balances
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-4">
-                    <Wallet className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                    <div className="text-sm text-gray-600 mb-3">
-                      No wallet connected
-                    </div>
-                    <Button
-                      onClick={handleCreateWallet}
-                      disabled={connecting}
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                    >
-                      {connecting ? (
-                        <>
-                          <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        <>
-                          <Wallet className="mr-2 h-3 w-3" />
-                          Create Wallet
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Wallet Balance Card */}
+            <WalletBalance />
 
             {/* API Key Card */}
             <Card>

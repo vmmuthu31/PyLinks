@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
+import { usePyLinksPayment } from "@/hooks/useWalletTransaction";
+import { openTransaction } from "@/lib/utils/blockscout";
 import { toast } from "sonner";
 import { PyLinksCoreService } from "@/lib/contracts/pylinks-core";
 
@@ -21,11 +23,13 @@ interface PaymentItem {
 }
 
 export default function BulkPaySingleMerchant() {
-  const { bulkPaySingleMerchant, loading } = usePyLinksCore();
+  const { sendDirectPayment, loading: paymentLoading } = usePyLinksPayment();
   const [merchantAddress, setMerchantAddress] = useState("");
   const [paymentItems, setPaymentItems] = useState<PaymentItem[]>([
     { id: "1", amount: "", description: "" }
   ]);
+  const [txHashes, setTxHashes] = useState<string[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const addPaymentItem = () => {
     const newId = (paymentItems.length + 1).toString();
@@ -72,22 +76,51 @@ export default function BulkPaySingleMerchant() {
     }
 
     try {
-      const request = {
-        merchant: merchantAddress,
-        amounts: validItems.map(item => item.amount),
-        descriptions: validItems.map(item => item.description)
-      };
+      setIsProcessing(true);
+      const completedTxHashes: string[] = [];
 
-      const result = await bulkPaySingleMerchant(request);
+      toast.success(`Processing ${validItems.length} payments...`);
+
+      // Process each payment individually
+      for (let i = 0; i < validItems.length; i++) {
+        const item = validItems[i];
+        
+        try {
+          toast.success(`Processing payment ${i + 1}/${validItems.length}: ${item.description}`);
+          
+          const result = await sendDirectPayment(
+            merchantAddress,
+            item.amount,
+            item.description
+          );
+          
+          completedTxHashes.push(result.hash);
+          toast.success(`Payment ${i + 1} completed! Hash: ${result.hash.slice(0, 10)}...`);
+          
+        } catch (paymentError) {
+          console.error(`Payment ${i + 1} failed:`, paymentError);
+          toast.error(`Payment ${i + 1} failed: ${item.description}`);
+          // Continue with other payments
+        }
+      }
+
+      setTxHashes(completedTxHashes);
       
-      if (result) {
-        toast.success(`Bulk payment batch created! Batch ID: ${result.batchId}`);
-        // Reset form
+      if (completedTxHashes.length > 0) {
+        toast.success(`Bulk payment completed! ${completedTxHashes.length}/${validItems.length} payments successful`);
+        
+        // Reset form on success
         setMerchantAddress("");
         setPaymentItems([{ id: "1", amount: "", description: "" }]);
+      } else {
+        toast.error("All payments failed. Please try again.");
       }
+      
     } catch (error) {
       console.error("Bulk payment error:", error);
+      toast.error("Bulk payment process failed");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -218,13 +251,44 @@ export default function BulkPaySingleMerchant() {
         </CardContent>
       </Card>
 
+      {/* Transaction Results */}
+      {txHashes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Transaction Results</CardTitle>
+            <CardDescription>
+              {txHashes.length} successful payments
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {txHashes.map((hash, index) => (
+              <div key={hash} className="flex items-center justify-between p-2 bg-green-50 rounded">
+                <span className="text-sm">Payment #{index + 1}</span>
+                <div className="flex items-center gap-2">
+                  <code className="text-xs bg-white px-2 py-1 rounded border">
+                    {hash.slice(0, 10)}...{hash.slice(-8)}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openTransaction(hash)}
+                  >
+                    View
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex gap-4">
         <Button
           onClick={handleSubmit}
-          disabled={!isFormValid() || loading}
+          disabled={!isFormValid() || isProcessing || paymentLoading}
           className="flex-1"
         >
-          {loading ? (
+          {(isProcessing || paymentLoading) ? (
             <>Processing...</>
           ) : (
             <>

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
+import { usePyLinksPayment } from "@/hooks/useWalletTransaction";
+import { openTransaction } from "@/lib/utils/blockscout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,16 +20,8 @@ import {
   User,
   Clock
 } from "lucide-react";
-import { ethers } from "ethers";
 import axios from "axios";
 import { toast } from "sonner";
-
-const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9"; // Sepolia PYUSD
-const PYUSD_ABI = [
-  "function transfer(address to, uint256 amount) returns (bool)",
-  "function balanceOf(address owner) view returns (uint256)",
-  "function decimals() view returns (uint8)"
-];
 
 interface Merchant {
   _id: string;
@@ -41,10 +35,12 @@ export default function PaymentPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { ready, authenticated, user, login, linkWallet } = usePrivy();
+  const { sendDirectPayment, loading: paymentLoading, error: paymentError } = usePyLinksPayment();
   
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [approvalHash, setApprovalHash] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
 
   const merchantId = searchParams.get("merchantId");
@@ -98,35 +94,14 @@ export default function PaymentPage() {
       setLoading(true);
       setPaymentStatus("processing");
 
-      // Get provider from window.ethereum (MetaMask or injected wallet)
-      if (!window.ethereum) {
-        throw new Error("No wallet provider found. Please install MetaMask.");
-      }
-      
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      
-      // Create contract instance
-      const pyusdContract = new ethers.Contract(PYUSD_ADDRESS, PYUSD_ABI, signer);
-      
-      // Check balance first
-      const balance = await pyusdContract.balanceOf(user.wallet.address);
-      const requiredAmount = ethers.utils.parseUnits(amount.toString(), 6); // PYUSD has 6 decimals
-      
-      if (balance.lt(requiredAmount)) {
-        throw new Error("Insufficient PYUSD balance");
-      }
+      // Use the new wallet transaction hook
+      const result = await sendDirectPayment(
+        merchant.walletAddress,
+        amount.toString(),
+        memo || `Payment to ${merchant.name}`
+      );
 
-      // Send transaction
-      const tx = await pyusdContract.transfer(merchant.walletAddress, requiredAmount, {
-        gasLimit: 100000,
-      });
-
-      toast.success("Transaction submitted! Waiting for confirmation...");
-      
-      // Wait for confirmation
-      const receipt = await tx.wait();
-      setTxHash(tx.hash);
+      setTxHash(result.hash);
       setPaymentStatus("success");
 
       // Record payment on backend
@@ -135,11 +110,11 @@ export default function PaymentPage() {
           `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/payments/record`,
           {
             merchantId,
-            txHash: tx.hash,
+            txHash: result.hash,
             amount: Number(amount),
             userWallet: user.wallet.address,
             memo,
-            blockNumber: receipt.blockNumber,
+            blockNumber: result.receipt?.blockNumber,
           }
         );
       } catch (recordError) {
@@ -152,14 +127,6 @@ export default function PaymentPage() {
     } catch (error: any) {
       console.error("Payment failed:", error);
       setPaymentStatus("error");
-      
-      if (error.code === 4001) {
-        toast.error("Transaction rejected by user");
-      } else if (error.message.includes("insufficient")) {
-        toast.error("Insufficient PYUSD balance");
-      } else {
-        toast.error(`Payment failed: ${error.message || "Unknown error"}`);
-      }
     } finally {
       setLoading(false);
     }
@@ -240,7 +207,7 @@ export default function PaymentPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => window.open(`https://sepolia.etherscan.io/tx/${txHash}`, '_blank')}
+                      onClick={() => openTransaction(txHash)}
                     >
                       <ExternalLink className="h-3 w-3" />
                     </Button>
