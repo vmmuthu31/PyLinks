@@ -346,27 +346,34 @@ No wallet signature required for this authentication method.`;
   const isPaymentFlow = merchantId && amount;
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-gray-900 flex items-center justify-center gap-2">
-            {userType === "merchant" ? (
-              <Store className="h-6 w-6" />
-            ) : (
-              <User className="h-6 w-6" />
-            )}
-            PyLinks {userType === "merchant" ? "Merchant" : "Customer"} Portal
-          </CardTitle>
-          <CardDescription>
-            {userType === "merchant"
-              ? "Access your merchant dashboard to manage PYUSD payments"
-              : isPaymentFlow
-              ? `Complete payment of $${amount} USD`
-              : "Access your customer account for PYUSD payments"}
-          </CardDescription>
-        </CardHeader>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4">
+      <div className="w-full max-w-md">
+        {/* Logo and Branding */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-lg mb-4">
+            <Store className="h-8 w-8 text-white" />
+          </div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            PyLinks
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Seamless PYUSD payments for merchants
+          </p>
+        </div>
 
-        <CardContent>
+        {/* Auth Card */}
+        <div className="backdrop-blur-sm bg-white/80 border-0 shadow-xl rounded-xl p-6">
+          <CardHeader className="space-y-1 text-center pb-4">
+            <CardTitle className="text-xl font-semibold">
+              {action === "login" ? "Welcome Back" : "Get Started"}
+            </CardTitle>
+            <CardDescription>
+              {action === "login"
+                ? "Sign in to your merchant dashboard"
+                : "Create your merchant account in seconds"}
+            </CardDescription>
+          </CardHeader>
+
           {/* Customer Login Redirect Notice */}
           {!isPaymentFlow && userType === "customer" && (
             <div className="mb-6">
@@ -396,7 +403,7 @@ No wallet signature required for this authentication method.`;
             </div>
           )}
 
-          {/* User Type Selection (only if not in payment flow) */}
+          {/* User Type Selection */}
           {!isPaymentFlow && (
             <div className="mb-6">
               <div className="flex items-center justify-center space-x-1 bg-gray-100 rounded-lg p-1">
@@ -409,10 +416,20 @@ No wallet signature required for this authentication method.`;
                   <Store className="h-4 w-4 mr-2" />
                   Merchant
                 </Button>
+                <Button
+                  variant={userType === "customer" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setUserType("customer")}
+                  className="flex-1"
+                >
+                  <User className="h-4 w-4 mr-2" />
+                  Customer
+                </Button>
               </div>
             </div>
           )}
 
+          {/* Error Alert */}
           {error && (
             <Alert className="mb-4 border-red-200 bg-red-50">
               <AlertCircle className="h-4 w-4 text-red-600" />
@@ -422,8 +439,8 @@ No wallet signature required for this authentication method.`;
             </Alert>
           )}
 
+          {/* Login Section */}
           <div className="space-y-6">
-            {/* Simplified login form */}
             <div className="text-center space-y-4">
               <div className="text-sm text-gray-600">
                 Login using Google or email to access your {userType} account.
@@ -460,10 +477,11 @@ No wallet signature required for this authentication method.`;
 
           <Separator className="my-6" />
 
+          {/* Footer Info */}
           <div className="text-center space-y-2">
             <div className="text-xs text-gray-500">
-              Email authentication is secure and doesn't require wallet
-              connection initially. Wallet signatures are only needed for actual
+              Email authentication is secure and doesn’t require wallet
+              connection initially. Wallet signatures are only needed for
               payments.
             </div>
             {userType === "merchant" && (
@@ -479,8 +497,8 @@ No wallet signature required for this authentication method.`;
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
