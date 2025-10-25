@@ -123,11 +123,6 @@ const sidebarItems: SidebarItem[] = [
     ],
   },
   {
-    title: "Analytics",
-    href: "/dashboard/analytics",
-    icon: BarChart3,
-  },
-  {
     title: "Affiliates",
     href: "/dashboard/affiliates",
     icon: Users,
@@ -331,7 +326,7 @@ export default function DashboardSidebar({ className }: DashboardSidebarProps) {
               Notifications
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               onClick={async () => {
                 try {
                   await logout();
@@ -340,7 +335,7 @@ export default function DashboardSidebar({ className }: DashboardSidebarProps) {
                   console.error("Logout error:", error);
                   router.push("/");
                 }
-              }} 
+              }}
               className="text-red-600"
             >
               <LogOut className="mr-2 h-4 w-4" />
