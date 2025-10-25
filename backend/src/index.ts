@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import paymentRoutes from "./routes/payment.routes";
 import merchantRoutes from "./routes/merchant.routes";
 import webhookRoutes from "./routes/webhook.routes";
+import authRoutes from "./routes/auth.routes";
 import { startBlockchainListener } from "./services/blockchain-listener";
 import { errorHandler } from "./middleware/error-handler";
 
@@ -32,6 +33,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/payments", paymentRoutes);
 app.use("/api/merchants", merchantRoutes);
 app.use("/api/webhooks", webhookRoutes);
+app.use("/api/auth", authRoutes);
 
 app.use(errorHandler);
 

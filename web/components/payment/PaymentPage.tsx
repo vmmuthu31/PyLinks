@@ -58,7 +58,7 @@ export default function PaymentPage() {
     const fetchMerchant = async () => {
       try {
         const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/merchants/${merchantId}`
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/merchants/${merchantId}`
         );
         setMerchant(response.data.data);
       } catch (error) {

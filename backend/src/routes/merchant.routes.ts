@@ -46,7 +46,7 @@ router.post("/register", async (req, res, next) => {
       success: true,
       data: {
         _id: merchant._id,
-        merchantId: merchant._id, // Keep both for backward compatibility
+        merchantId: merchant._id,
         email: merchant.email,
         name: merchant.name,
         walletAddress: merchant.walletAddress,

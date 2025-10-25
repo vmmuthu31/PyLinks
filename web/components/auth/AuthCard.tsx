@@ -5,14 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { 
   Loader2, 
   LogIn, 
-  UserPlus, 
   AlertCircle, 
   Store, 
   User, 
@@ -180,14 +178,8 @@ No wallet signature required for this authentication method.`;
         payload: { ...payload, signature: "***" } 
       });
 
-      // Call appropriate backend endpoint based on user type
-      const baseEndpoint = userType === "merchant" 
-        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/merchants`
-        : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/customers`;
-      
-      const endpoint = action === "register" 
-        ? `${baseEndpoint}/register`
-        : `${baseEndpoint}/login`;
+      // Call unified login endpoint - no separate register
+      const endpoint = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/login`;
 
       const response = await axios.post(endpoint, payload, {
         headers: {
@@ -208,7 +200,7 @@ No wallet signature required for this authentication method.`;
           localStorage.setItem("customer", JSON.stringify(userData));
         }
         
-        toast.success(`${action === 'register' ? 'Registration' : 'Login'} successful! Redirecting...`);
+        toast.success(`Login successful! Redirecting...`);
         
         // Redirect based on user type and context
         setTimeout(() => {
@@ -235,13 +227,7 @@ No wallet signature required for this authentication method.`;
       
       let errorMessage = "Authentication failed";
       
-      if (error.response?.status === 409 && action === "register") {
-        errorMessage = `${userType === "merchant" ? "Merchant" : "Customer"} already exists. Please use the Login tab instead.`;
-        setAction("login");
-      } else if (error.response?.status === 404 && action === "login") {
-        errorMessage = `No ${userType} account found. Please register first.`;
-        setAction("register");
-      } else if (error.response?.data?.message) {
+      if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
         errorMessage = error.message;
@@ -351,109 +337,59 @@ No wallet signature required for this authentication method.`;
             </Alert>
           )}
           
-          <Tabs value={action} onValueChange={(value) => setAction(value as AuthAction)}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login" className="flex items-center gap-2">
-                <LogIn className="h-4 w-4" />
-                Login
-              </TabsTrigger>
-              <TabsTrigger value="register" className="flex items-center gap-2">
-                <UserPlus className="h-4 w-4" />
-                Register
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="login" className="space-y-4 mt-6">
-              <div className="text-center space-y-4">
-                <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mb-4">
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    {userType === "merchant" ? <Store className="h-3 w-3" /> : <User className="h-3 w-3" />}
-                    {userType.charAt(0).toUpperCase() + userType.slice(1)} Login
-                  </Badge>
-                </div>
-                
-                <p className="text-sm text-gray-600">
-                  Login using Google, email, or wallet to access your {userType} account.
-                  {userType === "merchant" 
-                    ? " Wallet connection is optional - you can connect it later in your dashboard."
-                    : " You can login with email now and connect a wallet when making payments."
-                  }
-                </p>
-                
-                <div className="flex items-center justify-center space-x-4 text-xs text-gray-500 my-3">
-                  <div className="flex items-center gap-1">
-                    <Mail className="h-3 w-3" />
-                    <span>Email/Google</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Wallet className="h-3 w-3" />
-                    <span>Wallet</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Shield className="h-3 w-3" />
-                    <span>Signature</span>
-                  </div>
-                </div>
-                
-                <Button
-                  onClick={() => handleAuth("login")}
-                  disabled={loading || isProcessing}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  size="lg"
-                >
-                  {loading || isProcessing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isProcessing ? "Processing..." : "Logging in..."}
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="mr-2 h-4 w-4" />
-                      Login as {userType.charAt(0).toUpperCase() + userType.slice(1)}
-                    </>
-                  )}
-                </Button>
+          <div className="space-y-6">
+            {/* Simplified login form */}
+            <div className="text-center space-y-4">
+              <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mb-4">
+                <Badge variant="outline" className="flex items-center gap-1">
+                  {userType === "merchant" ? <Store className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                  {userType.charAt(0).toUpperCase() + userType.slice(1)} Login
+                </Badge>
               </div>
-            </TabsContent>
-            
-            <TabsContent value="register" className="space-y-4 mt-6">
-              <div className="text-center space-y-4">
-                <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mb-4">
-                  <Badge variant="outline" className="flex items-center gap-1 bg-green-50 border-green-200">
-                    {userType === "merchant" ? <Store className="h-3 w-3" /> : <User className="h-3 w-3" />}
-                    {userType.charAt(0).toUpperCase() + userType.slice(1)} Registration
-                  </Badge>
+              
+              <p className="text-sm text-gray-600">
+                Login using Google, email, or wallet to access your {userType} account.
+                {userType === "merchant" 
+                  ? " Wallet connection is optional - you can connect it later in your dashboard."
+                  : " You can login with email now and connect a wallet when making payments."
+                }
+              </p>
+              
+              <div className="flex items-center justify-center space-x-4 text-xs text-gray-500 my-3">
+                <div className="flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  <span>Email/Google</span>
                 </div>
-                
-                <p className="text-sm text-gray-600">
-                  Create your {userType} profile using Google, email, or wallet authentication.
-                  {userType === "merchant" 
-                    ? " You can register with email and add wallet later for receiving payments."
-                    : " You can register with email now and connect wallet when ready to make payments."
-                  }
-                </p>
-                
-                <Button
-                  onClick={() => handleAuth("register")}
-                  disabled={loading || isProcessing}
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  size="lg"
-                >
-                  {loading || isProcessing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isProcessing ? "Processing..." : "Registering..."}
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      Register as {userType.charAt(0).toUpperCase() + userType.slice(1)}
-                    </>
-                  )}
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Wallet className="h-3 w-3" />
+                  <span>Wallet</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Shield className="h-3 w-3" />
+                  <span>Signature</span>
+                </div>
               </div>
-            </TabsContent>
-          </Tabs>
+              
+              <Button
+                onClick={() => handleAuth("login")}
+                disabled={loading || isProcessing}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                size="lg"
+              >
+                {loading || isProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isProcessing ? "Processing..." : "Logging in..."}
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Login as {userType.charAt(0).toUpperCase() + userType.slice(1)}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
           
           <Separator className="my-6" />
           
