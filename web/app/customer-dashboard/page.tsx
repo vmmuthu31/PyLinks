@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { clearUser } from "@/lib/store/slices/authSlice";
+import WalletBalance from "@/components/wallet/WalletBalance";
 import { toast } from "sonner";
 
 export default function CustomerDashboard() {
@@ -132,6 +133,9 @@ export default function CustomerDashboard() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Wallet Balance */}
+            <WalletBalance compact />
 
             {/* Quick Actions Card */}
             <Card>

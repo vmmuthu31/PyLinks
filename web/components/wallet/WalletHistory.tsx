@@ -2,28 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  Clock, 
-  CheckCircle, 
+import {
+  ArrowUpRight,
+  ArrowDownLeft,
+  Clock,
+  CheckCircle,
   XCircle,
   Filter,
   Search,
   ExternalLink,
-  Download
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
   Table,
@@ -51,7 +57,9 @@ interface Transaction {
 export default function WalletHistory() {
   const { user } = usePrivy();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<
+    Transaction[]
+  >([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -69,7 +77,7 @@ export default function WalletHistory() {
         timestamp: new Date(Date.now() - 1000 * 60 * 30),
         status: "completed",
         txHash: "0xabc123def456...",
-        description: "Payment received from customer"
+        description: "Payment received from customer",
       },
       {
         id: "2",
@@ -80,7 +88,7 @@ export default function WalletHistory() {
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
         status: "completed",
         txHash: "0xdef456ghi789...",
-        description: "Bulk payment to merchant"
+        description: "Bulk payment to merchant",
       },
       {
         id: "3",
@@ -91,7 +99,7 @@ export default function WalletHistory() {
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
         status: "completed",
         txHash: "0xdef456ghi789...",
-        description: "Platform fee"
+        description: "Platform fee",
       },
       {
         id: "4",
@@ -102,7 +110,7 @@ export default function WalletHistory() {
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
         status: "pending",
         txHash: "0xghi789jkl012...",
-        description: "Escrow payment"
+        description: "Escrow payment",
       },
       {
         id: "5",
@@ -113,8 +121,8 @@ export default function WalletHistory() {
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
         status: "completed",
         txHash: "0xjkl012mno345...",
-        description: "Large payment received"
-      }
+        description: "Large payment received",
+      },
     ];
 
     setTransactions(mockTransactions);
@@ -130,23 +138,24 @@ export default function WalletHistory() {
 
     // Filter by search term
     if (searchTerm) {
-      filtered = filtered.filter(tx => 
-        tx.id.includes(searchTerm) ||
-        tx.txHash.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tx.from.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tx.to.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tx.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(
+        (tx) =>
+          tx.id.includes(searchTerm) ||
+          tx.txHash.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          tx.from.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          tx.to.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          tx.description?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     // Filter by type
     if (typeFilter !== "all") {
-      filtered = filtered.filter(tx => tx.type === typeFilter);
+      filtered = filtered.filter((tx) => tx.type === typeFilter);
     }
 
     // Filter by status
     if (statusFilter !== "all") {
-      filtered = filtered.filter(tx => tx.status === statusFilter);
+      filtered = filtered.filter((tx) => tx.status === statusFilter);
     }
 
     setFilteredTransactions(filtered);
@@ -154,29 +163,52 @@ export default function WalletHistory() {
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
-      case "sent": return <ArrowUpRight className="h-4 w-4 text-red-600" />;
-      case "received": return <ArrowDownLeft className="h-4 w-4 text-green-600" />;
-      case "fee": return <Clock className="h-4 w-4 text-gray-600" />;
-      default: return <Clock className="h-4 w-4 text-gray-600" />;
+      case "sent":
+        return <ArrowUpRight className="h-4 w-4 text-red-600" />;
+      case "received":
+        return <ArrowDownLeft className="h-4 w-4 text-green-600" />;
+      case "fee":
+        return <Clock className="h-4 w-4 text-gray-600" />;
+      default:
+        return <Clock className="h-4 w-4 text-gray-600" />;
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "completed": return <Badge className="bg-green-100 text-green-800"><CheckCircle className="h-3 w-3 mr-1" />Completed</Badge>;
-      case "pending": return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
-      case "failed": return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Failed</Badge>;
-      default: return <Badge variant="secondary">Unknown</Badge>;
+      case "completed":
+        return (
+          <Badge className="bg-green-100 text-green-800">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Completed
+          </Badge>
+        );
+      case "pending":
+        return (
+          <Badge variant="secondary">
+            <Clock className="h-3 w-3 mr-1" />
+            Pending
+          </Badge>
+        );
+      case "failed":
+        return (
+          <Badge variant="destructive">
+            <XCircle className="h-3 w-3 mr-1" />
+            Failed
+          </Badge>
+        );
+      default:
+        return <Badge variant="secondary">Unknown</Badge>;
     }
   };
 
   const formatDate = (timestamp: Date) => {
-    return timestamp.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return timestamp.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -186,18 +218,29 @@ export default function WalletHistory() {
 
   const formatAmount = (amount: string, type: string) => {
     const sign = type === "sent" || type === "fee" ? "-" : "+";
-    const color = type === "sent" || type === "fee" ? "text-red-600" : "text-green-600";
+    const color =
+      type === "sent" || type === "fee" ? "text-red-600" : "text-green-600";
     return (
       <span className={`font-mono ${color}`}>
-        {sign}{parseFloat(amount).toFixed(6)} PYUSD
+        {sign}
+        {parseFloat(amount).toFixed(6)} PYUSD
       </span>
     );
   };
 
   const exportTransactions = () => {
     const csvContent = [
-      ["Date", "Type", "Amount", "From", "To", "Status", "Transaction Hash", "Description"],
-      ...filteredTransactions.map(tx => [
+      [
+        "Date",
+        "Type",
+        "Amount",
+        "From",
+        "To",
+        "Status",
+        "Transaction Hash",
+        "Description",
+      ],
+      ...filteredTransactions.map((tx) => [
         formatDate(tx.timestamp),
         tx.type,
         tx.amount,
@@ -205,9 +248,11 @@ export default function WalletHistory() {
         tx.to,
         tx.status,
         tx.txHash,
-        tx.description || ""
-      ])
-    ].map(row => row.join(",")).join("\n");
+        tx.description || "",
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -234,7 +279,9 @@ export default function WalletHistory() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Wallet History</h1>
-          <p className="text-muted-foreground">Loading your transaction history...</p>
+          <p className="text-muted-foreground">
+            Loading your transaction history...
+          </p>
         </div>
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -265,18 +312,24 @@ export default function WalletHistory() {
             <div className="flex items-center space-x-2">
               <ArrowDownLeft className="h-4 w-4 text-green-600" />
               <div className="space-y-1">
-                <p className="text-sm font-medium leading-none">Total Received</p>
+                <p className="text-sm font-medium leading-none">
+                  Total Received
+                </p>
                 <p className="text-2xl font-bold text-green-600">
                   {transactions
-                    .filter(tx => tx.type === "received" && tx.status === "completed")
+                    .filter(
+                      (tx) =>
+                        tx.type === "received" && tx.status === "completed"
+                    )
                     .reduce((sum, tx) => sum + parseFloat(tx.amount), 0)
-                    .toFixed(6)} PYUSD
+                    .toFixed(6)}{" "}
+                  PYUSD
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-2">
@@ -285,15 +338,18 @@ export default function WalletHistory() {
                 <p className="text-sm font-medium leading-none">Total Sent</p>
                 <p className="text-2xl font-bold text-red-600">
                   {transactions
-                    .filter(tx => tx.type === "sent" && tx.status === "completed")
+                    .filter(
+                      (tx) => tx.type === "sent" && tx.status === "completed"
+                    )
                     .reduce((sum, tx) => sum + parseFloat(tx.amount), 0)
-                    .toFixed(6)} PYUSD
+                    .toFixed(6)}{" "}
+                  PYUSD
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-2">
@@ -302,22 +358,29 @@ export default function WalletHistory() {
                 <p className="text-sm font-medium leading-none">Total Fees</p>
                 <p className="text-2xl font-bold text-gray-600">
                   {transactions
-                    .filter(tx => tx.type === "fee" && tx.status === "completed")
+                    .filter(
+                      (tx) => tx.type === "fee" && tx.status === "completed"
+                    )
                     .reduce((sum, tx) => sum + parseFloat(tx.amount), 0)
-                    .toFixed(6)} PYUSD
+                    .toFixed(6)}{" "}
+                  PYUSD
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-2">
               <CheckCircle className="h-4 w-4 text-blue-600" />
               <div className="space-y-1">
                 <p className="text-sm font-medium leading-none">Net Balance</p>
-                <p className={`text-2xl font-bold ${getTotalBalance() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <p
+                  className={`text-2xl font-bold ${
+                    getTotalBalance() >= 0 ? "text-green-600" : "text-red-600"
+                  }`}
+                >
                   {getTotalBalance().toFixed(6)} PYUSD
                 </p>
               </div>
@@ -417,28 +480,42 @@ export default function WalletHistory() {
                       </div>
                     </TableCell>
                     <TableCell>{formatDate(transaction.timestamp)}</TableCell>
-                    <TableCell>{formatAmount(transaction.amount, transaction.type)}</TableCell>
+                    <TableCell>
+                      {formatAmount(transaction.amount, transaction.type)}
+                    </TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        {transaction.type === "sent" || transaction.type === "fee" ? (
+                        {transaction.type === "sent" ||
+                        transaction.type === "fee" ? (
                           <>
                             <p className="text-xs text-muted-foreground">To:</p>
-                            <p className="font-mono text-sm">{formatAddress(transaction.to)}</p>
+                            <p className="font-mono text-sm">
+                              {formatAddress(transaction.to)}
+                            </p>
                           </>
                         ) : (
                           <>
-                            <p className="text-xs text-muted-foreground">From:</p>
-                            <p className="font-mono text-sm">{formatAddress(transaction.from)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              From:
+                            </p>
+                            <p className="font-mono text-sm">
+                              {formatAddress(transaction.from)}
+                            </p>
                           </>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>{getStatusBadge(transaction.status)}</TableCell>
                     <TableCell>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
-                        onClick={() => window.open(`https://etherscan.io/tx/${transaction.txHash}`, '_blank')}
+                        onClick={() =>
+                          window.open(
+                            `https://eth-sepolia.blockscout.com/tx/${transaction.txHash}`,
+                            "_blank"
+                          )
+                        }
                       >
                         <ExternalLink className="h-4 w-4" />
                       </Button>

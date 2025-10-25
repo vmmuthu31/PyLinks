@@ -172,7 +172,7 @@ export default function WalletOverview() {
               <Button
                 onClick={() =>
                   window.open(
-                    `https://etherscan.io/address/${user?.wallet?.address}`,
+                    `https://eth-sepolia.blockscout.com/address/${user?.wallet?.address}`,
                     "_blank"
                   )
                 }

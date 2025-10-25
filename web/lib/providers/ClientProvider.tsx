@@ -46,7 +46,7 @@ function ClientProvider({ children }: { children: React.ReactNode }) {
               blockExplorers: {
                 default: {
                   name: "Etherscan",
-                  url: "https://sepolia.etherscan.io",
+                  url: "https://eth-sepolia.blockscout.com",
                 },
               },
             },
@@ -72,7 +72,7 @@ function ClientProvider({ children }: { children: React.ReactNode }) {
             blockExplorers: {
               default: {
                 name: "Etherscan",
-                url: "https://sepolia.etherscan.io",
+                url: "https://eth-sepolia.blockscout.com",
               },
             },
           },
