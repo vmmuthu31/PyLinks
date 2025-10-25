@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import PaymentPage from "@/components/payment/PaymentPage";
+import PyLinksPaymentPage from "@/components/payment/PyLinksPaymentPage";
 import { Loader2 } from "lucide-react";
 
 function PaymentPageFallback() {
@@ -15,7 +15,7 @@ function PaymentPageFallback() {
 export default function PayPage() {
   return (
     <Suspense fallback={<PaymentPageFallback />}>
-      <PaymentPage />
+      <PyLinksPaymentPage />
     </Suspense>
   );
 }
