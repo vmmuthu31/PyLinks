@@ -12,8 +12,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
-import { usePyLinksPayment } from "@/hooks/useWalletTransaction";
+import { useSendTransaction } from "@privy-io/react-auth";
 import { openTransaction } from "@/lib/utils/blockscout";
+import { ethers } from "ethers";
 import { toast } from "sonner";
 import { BulkPaymentRequest } from "@/lib/contracts/pylinks-core";
 
@@ -25,7 +26,7 @@ interface PaymentRequest {
 }
 
 export default function BulkPayMultipleMerchants() {
-  const { sendDirectPayment, loading: paymentLoading } = usePyLinksPayment();
+  const { sendTransaction } = useSendTransaction();
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([
     { id: "1", merchant: "", amount: "", description: "" }
   ]);
@@ -129,11 +130,22 @@ export default function BulkPayMultipleMerchants() {
         try {
           toast.success(`Processing payment ${i + 1}/${validRequests.length}: ${req.description}`);
           
-          const result = await sendDirectPayment(
-            req.merchant,
-            req.amount,
-            req.description
-          );
+          // PYUSD transfer using Privy sendTransaction
+          const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9";
+          const amountWei = ethers.utils.parseUnits(req.amount, 6); // PYUSD has 6 decimals
+          
+          const transferData = new ethers.utils.Interface([
+            "function transfer(address to, uint256 amount) returns (bool)"
+          ]).encodeFunctionData("transfer", [req.merchant, amountWei]);
+          
+          const result = await sendTransaction({
+            to: PYUSD_ADDRESS,
+            data: transferData
+          }, {
+            uiOptions: {
+              showWalletUIs: false // No popup modals
+            }
+          });
           
           completedTxHashes.push({
             hash: result.hash,
@@ -382,10 +394,10 @@ export default function BulkPayMultipleMerchants() {
       <div className="flex gap-4">
         <Button
           onClick={handleSubmit}
-          disabled={!isFormValid() || isProcessing || paymentLoading}
+          disabled={!isFormValid() || isProcessing}
           className="flex-1"
         >
-          {(isProcessing || paymentLoading) ? (
+          {isProcessing ? (
             <>Processing...</>
           ) : (
             <>

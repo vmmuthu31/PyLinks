@@ -18,15 +18,20 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
+import { useSendTransaction } from "@privy-io/react-auth";
+import { openTransaction } from "@/lib/utils/blockscout";
+import { ethers } from "ethers";
 import { toast } from "sonner";
 
 export default function Gamification() {
   const { user } = usePrivy();
   const { getSpinCredits, getLoyaltyPoints } = usePyLinksCore();
+  const { sendTransaction } = useSendTransaction();
   const [spinCredits, setSpinCredits] = useState("0");
   const [loyaltyPoints, setLoyaltyPoints] = useState("0");
   const [isSpinning, setIsSpinning] = useState(false);
   const [lastWin, setLastWin] = useState<string | null>(null);
+  const [lastWinTxHash, setLastWinTxHash] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -59,30 +64,64 @@ export default function Gamification() {
       return;
     }
 
+    if (!user?.wallet?.address) {
+      toast.error("Wallet not connected");
+      return;
+    }
+
     setIsSpinning(true);
     
     // Simulate spin animation
-    setTimeout(() => {
+    setTimeout(async () => {
       const prizes = [
-        "0.1 PYUSD",
-        "0.5 PYUSD", 
-        "1.0 PYUSD",
-        "5 Loyalty Points",
-        "10 Loyalty Points",
-        "Better luck next time!"
+        { name: "0.1 PYUSD", amount: "0.1", type: "pyusd" },
+        { name: "0.5 PYUSD", amount: "0.5", type: "pyusd" },
+        { name: "1.0 PYUSD", amount: "1.0", type: "pyusd" },
+        { name: "5 Loyalty Points", amount: "5", type: "points" },
+        { name: "10 Loyalty Points", amount: "10", type: "points" },
+        { name: "Better luck next time!", amount: "0", type: "none" }
       ];
       
       const randomPrize = prizes[Math.floor(Math.random() * prizes.length)];
-      setLastWin(randomPrize);
+      setLastWin(randomPrize.name);
       
       // Decrease spin credits (this would be handled by contract)
       const newCredits = Math.max(0, parseInt(spinCredits) - 1);
       setSpinCredits(newCredits.toString());
       
-      if (randomPrize !== "Better luck next time!") {
-        toast.success(`🎉 You won ${randomPrize}!`);
-      } else {
-        toast.info("Better luck next time!");
+      try {
+        // If won PYUSD, send actual payment
+        if (randomPrize.type === "pyusd" && parseFloat(randomPrize.amount) > 0 && user.wallet?.address) {
+          // PYUSD transfer using Privy sendTransaction
+          const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9";
+          const amountWei = ethers.utils.parseUnits(randomPrize.amount, 6); // PYUSD has 6 decimals
+          
+          const transferData = new ethers.utils.Interface([
+            "function transfer(address to, uint256 amount) returns (bool)"
+          ]).encodeFunctionData("transfer", [user.wallet.address, amountWei]);
+          
+          const result = await sendTransaction({
+            to: PYUSD_ADDRESS,
+            data: transferData
+          }, {
+            uiOptions: {
+              showWalletUIs: false // No popup modals
+            }
+          });
+          
+          setLastWinTxHash(result.hash);
+          toast.success(`🎉 You won ${randomPrize.name}! Payment sent to your wallet.`);
+        } else if (randomPrize.type === "points") {
+          // Update loyalty points (would be handled by contract)
+          const newPoints = parseInt(loyaltyPoints) + parseInt(randomPrize.amount);
+          setLoyaltyPoints(newPoints.toString());
+          toast.success(`🎉 You won ${randomPrize.name}!`);
+        } else {
+          toast.info("Better luck next time!");
+        }
+      } catch (error) {
+        console.error("Prize distribution error:", error);
+        toast.error("Failed to distribute prize. Please try again.");
       }
       
       setIsSpinning(false);
@@ -198,8 +237,25 @@ export default function Gamification() {
                 </Button>
 
                 {lastWin && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
                     <p className="text-green-800 font-medium">Last Win: {lastWin}</p>
+                    {lastWinTxHash && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-green-700">Transaction:</span>
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs bg-white px-2 py-1 rounded border">
+                            {lastWinTxHash.slice(0, 10)}...{lastWinTxHash.slice(-8)}
+                          </code>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openTransaction(lastWinTxHash)}
+                          >
+                            View
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -13,14 +13,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
-import { usePyLinksPayment } from "@/hooks/useWalletTransaction";
+import { useSendTransaction } from "@privy-io/react-auth";
 import { openTransaction } from "@/lib/utils/blockscout";
+import { ethers } from "ethers";
 import { toast } from "sonner";
 import { PyLinksCoreService } from "@/lib/contracts/pylinks-core";
 
 export default function SendMoney() {
   const { createPayment, loading } = usePyLinksCore();
-  const { sendDirectPayment, loading: paymentLoading } = usePyLinksPayment();
+  const { sendTransaction } = useSendTransaction();
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -41,12 +42,22 @@ export default function SendMoney() {
     }
 
     try {
-      // Use direct payment hook for immediate PYUSD transfer
-      const result = await sendDirectPayment(
-        recipient,
-        amount,
-        description
-      );
+      // PYUSD transfer using Privy sendTransaction
+      const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9";
+      const amountWei = ethers.utils.parseUnits(amount, 6); // PYUSD has 6 decimals
+      
+      const transferData = new ethers.utils.Interface([
+        "function transfer(address to, uint256 amount) returns (bool)"
+      ]).encodeFunctionData("transfer", [recipient, amountWei]);
+      
+      const result = await sendTransaction({
+        to: PYUSD_ADDRESS,
+        data: transferData
+      }, {
+        uiOptions: {
+          showWalletUIs: false // No popup modals
+        }
+      });
       
       setDirectTxHash(result.hash);
       toast.success("Payment sent successfully!");
@@ -220,17 +231,13 @@ export default function SendMoney() {
 
               <Button
                 onClick={handleDirectSend}
-                disabled={!recipient || !amount || !description || paymentLoading}
+                disabled={!recipient || !amount || !description}
                 className="w-full"
               >
-                {paymentLoading ? (
-                  <>Processing...</>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Send Money
-                  </>
-                )}
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Send Money
+                </>
               </Button>
 
               {/* Transaction Result */}

@@ -26,6 +26,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
+import { useSendTransaction } from "@privy-io/react-auth";
+import { openTransaction } from "@/lib/utils/blockscout";
+import { ethers } from "ethers";
 import { AffiliateDetails } from "@/lib/contracts/pylinks-core";
 import { toast } from "sonner";
 
@@ -35,14 +38,15 @@ export default function Affiliates() {
     registerAffiliate,
     getAffiliate,
     getAffiliateEarnings,
-    withdrawAffiliateEarnings,
     loading,
   } = usePyLinksCore();
+  const { sendTransaction } = useSendTransaction();
   const [affiliateName, setAffiliateName] = useState("");
   const [preferredCode, setPreferredCode] = useState("");
   const [affiliate, setAffiliate] = useState<AffiliateDetails | null>(null);
   const [earnings, setEarnings] = useState("0.00");
   const [isRegistering, setIsRegistering] = useState(false);
+  const [withdrawTxHash, setWithdrawTxHash] = useState<string | null>(null);
 
   useEffect(() => {
     loadAffiliateData();
@@ -88,12 +92,32 @@ export default function Affiliates() {
   };
 
   const handleWithdrawEarnings = async () => {
+    if (!user?.wallet?.address || !earnings || parseFloat(earnings) <= 0) {
+      toast.error("No earnings to withdraw");
+      return;
+    }
+
     try {
-      const success = await withdrawAffiliateEarnings();
-      if (success) {
-        toast.success("Earnings withdrawn successfully!");
-        await loadAffiliateData();
-      }
+      // PYUSD transfer using Privy sendTransaction
+      const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9";
+      const amountWei = ethers.utils.parseUnits(earnings, 6); // PYUSD has 6 decimals
+      
+      const transferData = new ethers.utils.Interface([
+        "function transfer(address to, uint256 amount) returns (bool)"
+      ]).encodeFunctionData("transfer", [user.wallet.address, amountWei]);
+      
+      const result = await sendTransaction({
+        to: PYUSD_ADDRESS,
+        data: transferData
+      }, {
+        uiOptions: {
+          showWalletUIs: false // No popup modals
+        }
+      });
+      
+      setWithdrawTxHash(result.hash);
+      toast.success("Earnings withdrawn successfully!");
+      await loadAffiliateData();
     } catch (error) {
       console.error("Withdraw earnings error:", error);
     }
@@ -354,17 +378,48 @@ export default function Affiliates() {
               <div className="flex gap-4">
                 <Button
                   onClick={handleWithdrawEarnings}
-                  disabled={parseFloat(earnings) === 0 || loading}
+                  disabled={parseFloat(earnings) === 0}
                   variant="outline"
                 >
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Withdraw Earnings
+                  <>
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Withdraw Earnings
+                  </>
                 </Button>
                 <Button variant="outline">
                   <Share className="h-4 w-4 mr-2" />
                   Share Referral Link
                 </Button>
               </div>
+
+              {/* Withdrawal Transaction Result */}
+              {withdrawTxHash && (
+                <Card className="bg-green-50 border-green-200">
+                  <CardHeader>
+                    <CardTitle className="text-green-800">Withdrawal Successful!</CardTitle>
+                    <CardDescription className="text-green-600">
+                      Your affiliate earnings have been withdrawn
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between p-2 bg-white rounded">
+                      <span className="text-sm">Transaction Hash:</span>
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                          {withdrawTxHash.slice(0, 10)}...{withdrawTxHash.slice(-8)}
+                        </code>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openTransaction(withdrawTxHash)}
+                        >
+                          View
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </CardContent>
           </Card>
 

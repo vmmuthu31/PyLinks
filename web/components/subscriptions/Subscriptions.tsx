@@ -1,42 +1,55 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  Calendar, 
-  DollarSign, 
-  Clock, 
+import {
+  Calendar,
+  DollarSign,
+  Clock,
   Repeat,
   Plus,
   Pause,
   Play,
-  X
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
+import { useSendTransaction } from "@privy-io/react-auth";
+import { openTransaction } from "@/lib/utils/blockscout";
+import { ethers } from "ethers";
 import { toast } from "sonner";
 
 export default function Subscriptions() {
   const { createSubscription, loading } = usePyLinksCore();
+  const { sendTransaction } = useSendTransaction();
   const [merchant, setMerchant] = useState("");
   const [usdAmount, setUsdAmount] = useState("");
   const [interval, setInterval] = useState("monthly");
   const [maxPayments, setMaxPayments] = useState("");
   const [description, setDescription] = useState("");
   const [autoRenew, setAutoRenew] = useState(true);
+  const [subscriptionTxHash, setSubscriptionTxHash] = useState<string | null>(
+    null
+  );
 
   const handleCreateSubscription = async () => {
     if (!merchant || !usdAmount || !description) {
@@ -59,11 +72,11 @@ export default function Subscriptions() {
         interval: intervalSeconds,
         maxPayments: maxPaymentsNum,
         description,
-        autoRenew
+        autoRenew,
       };
 
       const subscriptionId = await createSubscription(request);
-      
+
       if (subscriptionId) {
         toast.success(`Subscription created! ID: ${subscriptionId}`);
         // Reset form
@@ -81,21 +94,31 @@ export default function Subscriptions() {
 
   const getIntervalSeconds = (interval: string) => {
     switch (interval) {
-      case "daily": return 86400; // 24 hours
-      case "weekly": return 604800; // 7 days
-      case "monthly": return 2592000; // 30 days
-      case "yearly": return 31536000; // 365 days
-      default: return 2592000;
+      case "daily":
+        return 86400; // 24 hours
+      case "weekly":
+        return 604800; // 7 days
+      case "monthly":
+        return 2592000; // 30 days
+      case "yearly":
+        return 31536000; // 365 days
+      default:
+        return 2592000;
     }
   };
 
   const getIntervalLabel = (interval: string) => {
     switch (interval) {
-      case "daily": return "Daily";
-      case "weekly": return "Weekly";
-      case "monthly": return "Monthly";
-      case "yearly": return "Yearly";
-      default: return "Monthly";
+      case "daily":
+        return "Daily";
+      case "weekly":
+        return "Weekly";
+      case "monthly":
+        return "Monthly";
+      case "yearly":
+        return "Yearly";
+      default:
+        return "Monthly";
     }
   };
 
@@ -104,6 +127,38 @@ export default function Subscriptions() {
     const intervalMs = getIntervalSeconds(interval) * 1000;
     const nextPayment = new Date(now.getTime() + intervalMs);
     return nextPayment.toLocaleDateString();
+  };
+
+  const handleSubscriptionPayment = async (subscription: any) => {
+    try {
+      // PYUSD transfer using Privy sendTransaction
+      const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9";
+      const amountWei = ethers.utils.parseUnits(subscription.usdAmount, 6); // PYUSD has 6 decimals
+
+      const transferData = new ethers.utils.Interface([
+        "function transfer(address to, uint256 amount) returns (bool)",
+      ]).encodeFunctionData("transfer", [subscription.merchant, amountWei]);
+
+      const result = await sendTransaction(
+        {
+          to: PYUSD_ADDRESS,
+          data: transferData,
+        },
+        {
+          uiOptions: {
+            showWalletUIs: false, // No popup modals
+          },
+        }
+      );
+
+      setSubscriptionTxHash(result.hash);
+      toast.success(
+        `Subscription payment of $${subscription.usdAmount} sent successfully!`
+      );
+    } catch (error) {
+      console.error("Subscription payment error:", error);
+      toast.error("Failed to process subscription payment");
+    }
   };
 
   const mockSubscriptions = [
@@ -115,7 +170,7 @@ export default function Subscriptions() {
       interval: "Monthly",
       nextPayment: "2024-02-15",
       status: "Active",
-      description: "Premium Service Subscription"
+      description: "Premium Service Subscription",
     },
     {
       id: 2,
@@ -125,8 +180,8 @@ export default function Subscriptions() {
       interval: "Monthly",
       nextPayment: "2024-02-20",
       status: "Active",
-      description: "Basic Plan Subscription"
-    }
+      description: "Basic Plan Subscription",
+    },
   ];
 
   return (
@@ -141,8 +196,8 @@ export default function Subscriptions() {
       <Alert>
         <Repeat className="h-4 w-4" />
         <AlertDescription>
-          Subscriptions enable automatic recurring payments with USD pricing via Pyth oracles. 
-          Perfect for SaaS, memberships, and recurring services.
+          Subscriptions enable automatic recurring payments with USD pricing via
+          Pyth oracles. Perfect for SaaS, memberships, and recurring services.
         </AlertDescription>
       </Alert>
 
@@ -247,15 +302,22 @@ export default function Subscriptions() {
                 <div className="text-center py-8 text-muted-foreground">
                   <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No active subscriptions</p>
-                  <p className="text-sm">Create your first subscription to get started</p>
+                  <p className="text-sm">
+                    Create your first subscription to get started
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {mockSubscriptions.map((subscription) => (
-                    <div key={subscription.id} className="p-4 border rounded-lg">
+                    <div
+                      key={subscription.id}
+                      className="p-4 border rounded-lg"
+                    >
                       <div className="flex items-center justify-between mb-3">
                         <div>
-                          <h4 className="font-semibold">{subscription.description}</h4>
+                          <h4 className="font-semibold">
+                            {subscription.description}
+                          </h4>
                           <p className="text-sm text-muted-foreground">
                             ${subscription.usdAmount} • {subscription.interval}
                           </p>
@@ -264,6 +326,15 @@ export default function Subscriptions() {
                           <Badge variant="outline" className="text-green-600">
                             {subscription.status}
                           </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              handleSubscriptionPayment(subscription)
+                            }
+                          >
+                            <DollarSign className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="sm">
                             <Pause className="h-4 w-4" />
                           </Button>
@@ -272,11 +343,13 @@ export default function Subscriptions() {
                           </Button>
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <p className="text-muted-foreground">Customer</p>
-                          <p className="font-mono">{subscription.customer.slice(0, 10)}...</p>
+                          <p className="font-mono">
+                            {subscription.customer.slice(0, 10)}...
+                          </p>
                         </div>
                         <div>
                           <p className="text-muted-foreground">Next Payment</p>
@@ -289,6 +362,38 @@ export default function Subscriptions() {
               )}
             </CardContent>
           </Card>
+
+          {/* Subscription Payment Result */}
+          {subscriptionTxHash && (
+            <Card className="bg-green-50 border-green-200">
+              <CardHeader>
+                <CardTitle className="text-green-800">
+                  Payment Successful!
+                </CardTitle>
+                <CardDescription className="text-green-600">
+                  Your subscription payment has been processed
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between p-2 bg-white rounded">
+                  <span className="text-sm">Transaction Hash:</span>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                      {subscriptionTxHash.slice(0, 10)}...
+                      {subscriptionTxHash.slice(-8)}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openTransaction(subscriptionTxHash)}
+                    >
+                      View
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -300,7 +405,9 @@ export default function Subscriptions() {
               <CardContent className="space-y-4">
                 <div className="flex justify-between">
                   <span>Amount:</span>
-                  <span className="font-mono">${parseFloat(usdAmount).toFixed(2)}</span>
+                  <span className="font-mono">
+                    ${parseFloat(usdAmount).toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Billing:</span>
@@ -336,7 +443,7 @@ export default function Subscriptions() {
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex items-start gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div>
@@ -346,7 +453,7 @@ export default function Subscriptions() {
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex items-start gap-2">
                 <Repeat className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div>
