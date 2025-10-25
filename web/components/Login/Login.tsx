@@ -20,13 +20,12 @@ export default function Login() {
       // Step 2: Call backend depending on button clicked
       const endpoint =
         type === "register"
-          ? `${import.meta.env.VITE_BACKEND_URL}/api/merchants/register`
-          : `${import.meta.env.VITE_BACKEND_URL}/api/merchants/login`;
+          ? `${process.env.VITE_BACKEND_URL}/api/merchants/register`
+          : `${process.env.VITE_BACKEND_URL}/api/merchants/login`;
 
-          const payload = {
-            email: user.email,
-          };
-          
+      const payload = {
+        email: user.email,
+      };
 
       const res = await axios.post(endpoint, payload);
 
