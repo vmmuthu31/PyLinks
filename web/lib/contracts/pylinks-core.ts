@@ -76,6 +76,36 @@ export interface AffiliateDetails {
   tier: number;
 }
 
+export interface BulkPaymentRequest {
+  merchant: string;
+  amount: string; // PYUSD amount (6 decimals)
+  description: string;
+}
+
+export interface BulkBatchDetails {
+  id: number;
+  customer: string;
+  totalAmount: string;
+  totalFees: string;
+  paymentCount: number;
+  processed: boolean;
+  createdAt: number;
+}
+
+export interface BulkPaymentToSingleRequest {
+  merchant: string;
+  amounts: string[]; // PYUSD amounts (6 decimals)
+  descriptions: string[];
+}
+
+export interface BulkEscrowPaymentRequest {
+  merchants: string[];
+  customers: string[];
+  usdAmounts: string[]; // USD amounts (8 decimals)
+  descriptions: string[];
+  autoRelease?: boolean;
+}
+
 export class PyLinksCoreService {
   private contract: ethers.Contract;
   private provider: ethers.providers.JsonRpcProvider;
@@ -230,6 +260,159 @@ export class PyLinksCoreService {
     );
   }
 
+  // ============ BULK PAYMENT FUNCTIONS ============
+
+  /**
+   * Bulk pay single merchant (multiple payments to one recipient)
+   */
+  async bulkPaySingleMerchant(
+    request: BulkPaymentToSingleRequest
+  ): Promise<{ batchId: number; paymentIds: number[] } | null> {
+    if (!this.signer) throw new Error("Signer required for write operations");
+
+    const amounts = request.amounts.map(amount => 
+      ethers.utils.parseUnits(amount, 6)
+    );
+
+    const tx = await this.contract.bulkPaySingleMerchant(
+      request.merchant,
+      amounts,
+      request.descriptions
+    );
+
+    const receipt = await tx.wait();
+    const event = receipt.events?.find((e: any) => e.event === 'BulkBatchCreated');
+    
+    if (event) {
+      return {
+        batchId: event.args.batchId.toNumber(),
+        paymentIds: [] // Would need to parse from events
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Bulk pay multiple merchants (distribute payments to multiple recipients)
+   */
+  async bulkPayMultipleMerchants(
+    requests: BulkPaymentRequest[]
+  ): Promise<{ batchId: number; paymentIds: number[] } | null> {
+    if (!this.signer) throw new Error("Signer required for write operations");
+
+    const formattedRequests = requests.map(req => ({
+      merchant: req.merchant,
+      amount: ethers.utils.parseUnits(req.amount, 6),
+      description: req.description
+    }));
+
+    const tx = await this.contract.bulkPayMultipleMerchants(formattedRequests);
+    const receipt = await tx.wait();
+    const event = receipt.events?.find((e: any) => e.event === 'BulkBatchCreated');
+    
+    if (event) {
+      return {
+        batchId: event.args.batchId.toNumber(),
+        paymentIds: [] // Would need to parse from events
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Bulk create escrow payments
+   */
+  async bulkCreateEscrowPayments(
+    request: BulkEscrowPaymentRequest,
+    priceUpdateData: string[] = []
+  ): Promise<{ batchId: number; paymentIds: number[] } | null> {
+    if (!this.signer) throw new Error("Signer required for write operations");
+
+    const updateFee = priceUpdateData.length > 0
+      ? await this.getPriceUpdateFee(priceUpdateData)
+      : ethers.BigNumber.from(0);
+
+    const usdAmounts = request.usdAmounts.map(amount => 
+      ethers.utils.parseUnits(amount, 8)
+    );
+
+    const tx = await this.contract.bulkCreateEscrowPayments(
+      request.merchants,
+      request.customers,
+      usdAmounts,
+      request.descriptions,
+      request.autoRelease || false,
+      priceUpdateData,
+      { value: updateFee }
+    );
+
+    const receipt = await tx.wait();
+    const event = receipt.events?.find((e: any) => e.event === 'BulkBatchCreated');
+    
+    if (event) {
+      return {
+        batchId: event.args.batchId.toNumber(),
+        paymentIds: [] // Would need to parse from events
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Process bulk escrow batch
+   */
+  async processBulkEscrowBatch(batchId: number): Promise<ethers.ContractTransaction> {
+    if (!this.signer) throw new Error("Signer required for write operations");
+    return await this.contract.processBulkEscrowBatch(batchId);
+  }
+
+  /**
+   * Get bulk batch details
+   */
+  async getBulkBatch(batchId: number): Promise<BulkBatchDetails | null> {
+    try {
+      const result = await this.contract.getBulkBatch(batchId);
+      return {
+        id: batchId,
+        customer: result.customer,
+        totalAmount: ethers.utils.formatUnits(result.totalAmount, 6),
+        totalFees: ethers.utils.formatUnits(result.totalFees, 6),
+        paymentCount: result.paymentCount.toNumber(),
+        processed: result.processed,
+        createdAt: Date.now() // Contract doesn't return this in getBulkBatch
+      };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Get bulk batch payment IDs
+   */
+  async getBulkBatchPayments(batchId: number): Promise<number[]> {
+    try {
+      const result = await this.contract.getBulkBatchPayments(batchId);
+      return result.map((id: ethers.BigNumber) => id.toNumber());
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /**
+   * Get customer's bulk batches
+   */
+  async getCustomerBulkBatches(customer: string): Promise<number[]> {
+    // This would require iterating through the mapping or using events
+    const filter = this.contract.filters.BulkBatchCreated(null, customer);
+    const events = await this.contract.queryFilter(filter);
+    return events
+      .map((event) => event.args?.batchId.toNumber())
+      .filter(Boolean);
+  }
+
   // ============ AFFILIATE FUNCTIONS ============
 
   /**
@@ -319,6 +502,17 @@ export class PyLinksCoreService {
   }
 
   /**
+   * Get customer's payments
+   */
+  async getCustomerPayments(customer: string): Promise<number[]> {
+    const filter = this.contract.filters.PaymentProcessed(null, customer);
+    const events = await this.contract.queryFilter(filter);
+    return events
+      .map((event) => event.args?.paymentId.toNumber())
+      .filter(Boolean);
+  }
+
+  /**
    * Get user's spin credits
    */
   async getSpinCredits(user: string): Promise<string> {
@@ -390,7 +584,7 @@ export class PyLinksCoreService {
    * Format payment type
    */
   static formatPaymentType(type: number): string {
-    const types = ["Regular", "Escrow", "Subscription"];
+    const types = ["Regular", "Escrow", "Subscription", "Bulk"];
     return types[type] || "Unknown";
   }
 
@@ -430,5 +624,28 @@ export class PyLinksCoreService {
     const seconds = Math.floor(diff % 60);
 
     return `${minutes}m ${seconds}s`;
+  }
+
+  /**
+   * Format bulk batch status
+   */
+  static formatBulkBatchStatus(processed: boolean): string {
+    return processed ? "Processed" : "Pending";
+  }
+
+  /**
+   * Calculate total bulk payment amount
+   */
+  static calculateBulkTotal(amounts: string[]): string {
+    return amounts.reduce((total, amount) => {
+      return (parseFloat(total) + parseFloat(amount)).toString();
+    }, "0");
+  }
+
+  /**
+   * Generate bulk session ID
+   */
+  static generateBulkSessionId(type: 'single' | 'multiple'): string {
+    return `bulk_${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }
