@@ -304,7 +304,8 @@ export default function DashboardSidebar({ className }: DashboardSidebarProps) {
                     )}...${user?.wallet?.address?.slice(-4)}`}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {user?.google?.email || "Wallet User"}
+                  {user?.google?.email.slice(0, 18).concat("...") ||
+                    "Wallet User"}
                 </span>
               </div>
               <ChevronDown className="h-4 w-4 ml-auto" />
@@ -330,7 +331,18 @@ export default function DashboardSidebar({ className }: DashboardSidebarProps) {
               Notifications
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="text-red-600">
+            <DropdownMenuItem 
+              onClick={async () => {
+                try {
+                  await logout();
+                  router.push("/");
+                } catch (error) {
+                  console.error("Logout error:", error);
+                  router.push("/");
+                }
+              }} 
+              className="text-red-600"
+            >
               <LogOut className="mr-2 h-4 w-4" />
               Sign out
             </DropdownMenuItem>
