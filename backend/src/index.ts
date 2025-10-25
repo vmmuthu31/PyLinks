@@ -6,6 +6,7 @@ import paymentRoutes from "./routes/payment.routes";
 import merchantRoutes from "./routes/merchant.routes";
 import webhookRoutes from "./routes/webhook.routes";
 import authRoutes from "./routes/auth.routes";
+import disputeRoutes from "./routes/disputes";
 import { startBlockchainListener } from "./services/blockchain-listener";
 import { errorHandler } from "./middleware/error-handler";
 
@@ -34,6 +35,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/merchants", merchantRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/disputes", disputeRoutes);
 
 app.use(errorHandler);
 

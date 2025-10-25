@@ -90,8 +90,8 @@ Our flagship `PyLinksCore` contract is a revolutionary all-in-one payment proces
 **Affiliate & Referral System**
 
 - 🏆 4-tier system: Bronze, Silver, Gold, Diamond
-- 💸 20% of platform fees go to affiliates
-- � Volume and performance tracking
+- 💸 20% of platform fees go to affiliates (tracked via `affiliateEarnings` mapping)
+- 📊 Volume and performance tracking via smart contract events
 - 🔗 Unique referral codes and attribution
 
 **Gamification Engine**
@@ -407,6 +407,7 @@ pylinks/
 - **Token Standard**: PYUSD ERC-20 integration
 - **Development**: Hardhat with TypeScript
 - **Security**: OpenZeppelin contracts, ReentrancyGuard, comprehensive testing
+- **Explorer Integration**: Blockscout Sepolia for transaction verification and transparency
 
 ### 💻 Frontend Applications
 
@@ -415,15 +416,19 @@ pylinks/
 - **State Management**: React Hooks, Context API, Zustand
 - **Authentication**: Google OAuth, JWT tokens
 - **UI/UX**: Mobile-first design, QR scanning, real-time updates
+- **Loading States**: React Top Loading Bar for smooth user experience
+- **Transaction Tracking**: Integrated Blockscout explorer links for transparency
 
 ### ⚙️ Backend Infrastructure
 
 - **Runtime**: Node.js with TypeScript
 - **Framework**: Express.js with middleware stack
-- **Database**: PostgreSQL with Prisma ORM
+- **Database**: MongoDB with Mongoose ODM
 - **Authentication**: JWT with refresh tokens, API key management
 - **Webhooks**: Event-driven architecture with signature validation
 - **Blockchain Monitoring**: Real-time event listening with ethers.js
+- **Email Notifications**: Nodemailer with HTML templates for user onboarding
+- **Dispute Resolution**: Comprehensive dispute management with automated workflows
 
 ### 🔧 Developer Tools & SDK
 
@@ -431,7 +436,7 @@ pylinks/
 - **Code Generation**: Smart contract types via TypeChain
 - **Testing**: Hardhat, Jest, Mocha, Chai
 - **Documentation**: TypeDoc, inline comments
-- **Package Management**: npm/yarn with workspace support
+- **Package Management**: Bun for faster installs and better performance
 
 ### 🚀 Infrastructure & DevOps
 
@@ -720,6 +725,31 @@ console.log(
 - **Gamification**: Spin credits and loyalty points
 - **Oracle Integration**: Dynamic USD pricing via Pyth
 - **Security**: Comprehensive access control and validation
+
+#### Key Smart Contract Functions
+
+**Public Mappings (Auto-generated Getters)**
+```solidity
+// Access earnings directly via public mappings
+merchantEarnings(address merchant) → uint256
+affiliateEarnings(address affiliate) → uint256
+customerPayments(address customer, uint256 index) → uint256
+merchantPayments(address merchant, uint256 index) → uint256
+```
+
+**Core Payment Functions**
+```solidity
+getPayment(uint256 paymentId) → (address merchant, address customer, uint256 amount, ...)
+getSubscription(uint256 subscriptionId) → (address merchant, address customer, ...)
+getAffiliate(address wallet) → (uint256 id, string name, bytes32 referralCode, ...)
+withdrawAffiliateEarnings() // Withdraw accumulated affiliate earnings
+```
+
+**Bulk Payment Functions**
+```solidity
+getBulkBatch(uint256 batchId) → (address customer, uint256 totalAmount, ...)
+getBulkBatchPayments(uint256 batchId) → uint256[] memory
+```
 
 #### NFTReceipt Contract Features
 

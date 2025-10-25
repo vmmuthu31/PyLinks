@@ -3,8 +3,10 @@ import { ethers } from "ethers";
 import { Merchant } from "../models/Merchant";
 import { Customer } from "../models/Customer";
 import { generateApiKey } from "../utils/crypto";
+import { NotificationService } from "../services/notificationService";
 
 const router = express.Router();
+const notificationService = new NotificationService();
 
 /**
  * Unified Login Endpoint
@@ -59,6 +61,7 @@ router.post("/login", async (req, res) => {
     }
 
     let userData;
+    let isNewUser = false;
 
     if (userType === "merchant") {
       // Handle merchant authentication
@@ -81,6 +84,7 @@ router.post("/login", async (req, res) => {
 
         await merchant.save();
         console.log("✅ New merchant created:", merchantId);
+        isNewUser = true;
       } else {
         // Update existing merchant
         if (walletAddress && !merchant.walletAddress) {
@@ -119,6 +123,7 @@ router.post("/login", async (req, res) => {
 
         await customer.save();
         console.log("✅ New customer created:", customerId);
+        isNewUser = true;
       } else {
         // Update existing customer
         if (walletAddress && !customer.walletAddress) {
@@ -137,6 +142,22 @@ router.post("/login", async (req, res) => {
         createdAt: customer.createdAt,
         updatedAt: customer.updatedAt,
       };
+    }
+
+    // Send welcome email for new users
+    if (isNewUser) {
+      try {
+        await notificationService.sendWelcomeEmail({
+          email,
+          name,
+          userType: userType as "merchant" | "customer",
+          walletAddress: walletAddress || undefined,
+        });
+        console.log(`✅ Welcome email sent to new ${userType}: ${email}`);
+      } catch (emailError) {
+        console.error(`❌ Failed to send welcome email to ${email}:`, emailError);
+        // Don't fail the authentication if email fails
+      }
     }
 
     res.json({
