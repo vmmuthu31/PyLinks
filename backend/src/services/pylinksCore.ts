@@ -13,29 +13,29 @@ export const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 
 // Contract ABI based on actual deployed contract
 const PyLinksCore = {
-  "abi": [
+  abi: [
     // Payment functions
     "function disputeEscrowPayment(uint256 paymentId) external",
-    "function releaseEscrowPayment(uint256 paymentId) external", 
+    "function releaseEscrowPayment(uint256 paymentId) external",
     "function getPayment(uint256 paymentId) external view returns (address merchant, address customer, uint256 amount, string sessionId, uint8 status, uint8 paymentType, uint256 createdAt, uint256 expiresAt, bool oneTime, uint256 splits)",
-    
+
     // Public mappings (auto-generated getters)
     "function merchantEarnings(address merchant) external view returns (uint256)",
     "function affiliateEarnings(address affiliate) external view returns (uint256)",
     "function customerPayments(address customer, uint256 index) external view returns (uint256)",
     "function merchantPayments(address merchant, uint256 index) external view returns (uint256)",
-    
+
     // Affiliate functions
     "function withdrawAffiliateEarnings() external",
     "function getAffiliate(address wallet) external view returns (uint256 id, string name, bytes32 referralCode, uint256 totalReferrals, uint256 totalVolume, uint8 tier)",
-    
+
     // Bulk functions
     "function getBulkBatch(uint256 batchId) external view returns (address customer, uint256 totalAmount, uint256 totalFees, uint256 paymentCount, bool processed, uint256 createdAt)",
     "function getBulkBatchPayments(uint256 batchId) external view returns (uint256[] memory)",
-    
+
     // Subscription functions
-    "function getSubscription(uint256 subscriptionId) external view returns (address merchant, address customer, uint256 usdAmount, uint256 interval, uint256 nextPayment, uint8 status, uint256 maxPayments, uint256 paymentCount, bool autoRenew)"
-  ]
+    "function getSubscription(uint256 subscriptionId) external view returns (address merchant, address customer, uint256 usdAmount, uint256 interval, uint256 nextPayment, uint8 status, uint256 maxPayments, uint256 paymentCount, bool autoRenew)",
+  ],
 };
 
 export interface PaymentDetails {
@@ -97,10 +97,10 @@ export class PyLinksCoreService {
         status: result[4], // status
         paymentType: result[5], // paymentType
         createdAt: result[6].toNumber(), // createdAt
-        expiresAt: result[7].toNumber() // expiresAt
+        expiresAt: result[7].toNumber(), // expiresAt
       };
     } catch (error) {
-      console.error('Error getting payment:', error);
+      console.error("Error getting payment:", error);
       return null;
     }
   }
@@ -108,7 +108,9 @@ export class PyLinksCoreService {
   /**
    * Dispute an escrow payment
    */
-  async disputeEscrowPayment(paymentId: number): Promise<ethers.ContractTransaction> {
+  async disputeEscrowPayment(
+    paymentId: number
+  ): Promise<ethers.ContractTransaction> {
     if (!this.signer) throw new Error("Signer required for write operations");
     return await this.contract.disputeEscrowPayment(paymentId);
   }
@@ -116,7 +118,9 @@ export class PyLinksCoreService {
   /**
    * Release an escrow payment
    */
-  async releaseEscrowPayment(paymentId: number): Promise<ethers.ContractTransaction> {
+  async releaseEscrowPayment(
+    paymentId: number
+  ): Promise<ethers.ContractTransaction> {
     if (!this.signer) throw new Error("Signer required for write operations");
     return await this.contract.releaseEscrowPayment(paymentId);
   }
@@ -129,8 +133,8 @@ export class PyLinksCoreService {
       const earnings = await this.contract.merchantEarnings(merchant);
       return ethers.utils.formatUnits(earnings, 6); // PYUSD has 6 decimals
     } catch (error) {
-      console.error('Error getting merchant earnings:', error);
-      return '0';
+      console.error("Error getting merchant earnings:", error);
+      return "0";
     }
   }
 
@@ -142,8 +146,8 @@ export class PyLinksCoreService {
       const earnings = await this.contract.affiliateEarnings(affiliate);
       return ethers.utils.formatUnits(earnings, 6); // PYUSD has 6 decimals
     } catch (error) {
-      console.error('Error getting affiliate earnings:', error);
-      return '0';
+      console.error("Error getting affiliate earnings:", error);
+      return "0";
     }
   }
 

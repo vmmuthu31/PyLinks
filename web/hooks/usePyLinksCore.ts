@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy, useSendTransaction } from '@privy-io/react-auth';
 import { ethers } from 'ethers';
-import { PyLinksCoreService, PaymentDetails, SubscriptionDetails, AffiliateDetails, BulkPaymentRequest, BulkPaymentToSingleRequest, BulkEscrowPaymentRequest, BulkBatchDetails } from '@/lib/contracts/pylinks-core';
+import { PyLinksCoreService, PaymentDetails, SubscriptionDetails, AffiliateDetails, BulkPaymentRequest, BulkPaymentToSingleRequest, BulkEscrowPaymentRequest, BulkBatchDetails, CONTRACTS } from '@/lib/contracts/pylinks-core';
 import { toast } from 'sonner';
 import { getTransactionUrl, openTransaction } from '@/lib/utils/blockscout';
 
@@ -48,31 +48,80 @@ interface UsePyLinksCoreReturn {
 
 export function usePyLinksCore(): UsePyLinksCoreReturn {
   const { ready, user } = usePrivy();
+  const { sendTransaction } = useSendTransaction();
   const [service, setService] = useState<PyLinksCoreService | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize service when wallet is connected
-  useEffect(() => {
-    if (ready && user?.wallet?.address && window.ethereum) {
-      try {
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
-        const signer = provider.getSigner();
-        const pyLinksService = new PyLinksCoreService(signer);
-        setService(pyLinksService);
-        setError(null);
-      } catch (err: any) {
-        setError(`Failed to initialize PyLinksCore service: ${err.message}`);
-        console.error('PyLinksCore initialization error:', err);
+  // Validate wallet connection
+  const validateWalletConnection = useCallback(async () => {
+    if (!ready || !user?.wallet?.address || !window.ethereum) {
+      return false;
+    }
+
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      
+      // Test wallet connection by getting address
+      await signer.getAddress();
+      return true;
+    } catch (error: any) {
+      console.error('Wallet validation failed:', error);
+      if (error.code === 'UNSUPPORTED_OPERATION') {
+        setError('Wallet connection issue. Please reconnect your wallet.');
       }
-    } else {
-      setService(null);
+      return false;
     }
   }, [ready, user]);
 
+  // Initialize service when wallet is connected
+  useEffect(() => {
+    const initializeService = async () => {
+      if (ready && user?.wallet?.address && window.ethereum) {
+        const isValid = await validateWalletConnection();
+        
+        if (isValid) {
+          try {
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            const signer = provider.getSigner();
+            const pyLinksService = new PyLinksCoreService(signer);
+            setService(pyLinksService);
+            setError(null);
+          } catch (err: any) {
+            setError(`Failed to initialize PyLinksCore service: ${err.message}`);
+            console.error('PyLinksCore initialization error:', err);
+          }
+        } else {
+          setService(null);
+        }
+      } else {
+        setService(null);
+      }
+    };
+
+    initializeService();
+  }, [ready, user, validateWalletConnection]);
+
   // Generic error handler
   const handleError = useCallback((error: any, operation: string) => {
-    const message = error.message || 'Unknown error occurred';
+    let message = error.message || 'Unknown error occurred';
+    
+    // Handle specific error types
+    if (error.code === 'UNPREDICTABLE_GAS_LIMIT') {
+      message = 'Transaction may fail. Please check contract parameters and try again.';
+    } else if (error.code === 'UNSUPPORTED_OPERATION') {
+      message = 'Wallet connection issue. Please reconnect your wallet.';
+    } else if (error.code === 'CALL_EXCEPTION') {
+      message = 'Smart contract execution failed. Please check your parameters and try again.';
+    } else if (error.code === 4001) {
+      message = 'Transaction rejected by user';
+    } else if (error.message?.includes('insufficient')) {
+      message = 'Insufficient balance for transaction';
+    } else if (error.data === '0xc0b6c919') {
+      message = 'Contract execution reverted. Please check payment parameters.';
+    }
+    
     setError(`${operation} failed: ${message}`);
     console.error(`${operation} error:`, error);
     toast.error(`${operation} failed: ${message}`);
@@ -81,8 +130,15 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
 
   // Payment functions
   const createPayment = useCallback(async (request: any): Promise<string | null> => {
-    if (!service) {
-      toast.error('PyLinksCore service not initialized');
+    // Validate wallet connection
+    if (!user?.wallet?.address) {
+      toast.error('Wallet not connected. Please connect your wallet first.');
+      return null;
+    }
+
+    // Validate request parameters
+    if (!request.merchant || !request.amount || !request.sessionId) {
+      toast.error('Invalid payment parameters');
       return null;
     }
 
@@ -90,32 +146,56 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
       setLoading(true);
       setError(null);
       
-      const tx = await service.createPayment(request);
-      toast.success('Payment creation submitted...');
+      // Prepare contract call data using ethers interface
+      const contractInterface = new ethers.utils.Interface([
+        'function createPayment(address merchant, uint256 amount, string sessionId, string description, bytes32 referralCode, tuple(address recipient, uint256 bps)[] splits, bool isOneTime) returns (uint256)'
+      ]);
       
-      const receipt = await tx.wait();
+      const splits = request.splits || [];
+      const referralCode = request.referralCode
+        ? ethers.utils.formatBytes32String(request.referralCode)
+        : ethers.constants.HashZero;
       
-      // Show success with Blockscout link
+      const data = contractInterface.encodeFunctionData('createPayment', [
+        request.merchant,
+        ethers.utils.parseUnits(request.amount, 6), // PYUSD has 6 decimals
+        request.sessionId,
+        request.description,
+        referralCode,
+        splits,
+        request.isOneTime || true
+      ]);
+      
+      // Use Privy's sendTransaction to avoid wallet popups
+      const result = await sendTransaction({
+        to: CONTRACTS.PYLINKS_CORE,
+        data: data
+      }, {
+        uiOptions: {
+          showWalletUIs: false // Prevent wallet popup
+        }
+      });
+      
       toast.success('Payment created successfully!', {
         duration: 8000,
         action: {
           label: 'View on Explorer',
-          onClick: () => openTransaction(receipt.transactionHash)
+          onClick: () => openTransaction(result.hash)
         }
       });
       
-      return receipt.transactionHash;
+      return result.hash;
     } catch (error: any) {
       handleError(error, 'Create payment');
       return null;
     } finally {
       setLoading(false);
     }
-  }, [service, handleError]);
+  }, [sendTransaction, handleError, user]);
 
   const processPayment = useCallback(async (paymentId: number): Promise<boolean> => {
-    if (!service) {
-      toast.error('PyLinksCore service not initialized');
+    if (!user?.wallet?.address) {
+      toast.error('Wallet not connected');
       return false;
     }
 
@@ -123,19 +203,30 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
       setLoading(true);
       setError(null);
       
-      const tx = await service.processPayment(paymentId);
-      toast.success('Payment processing submitted...');
+      // Prepare contract call data
+      const contractInterface = new ethers.utils.Interface([
+        'function processPayment(uint256 paymentId)'
+      ]);
       
-      await tx.wait();
+      const data = contractInterface.encodeFunctionData('processPayment', [paymentId]);
+      
+      const result = await sendTransaction({
+        to: CONTRACTS.PYLINKS_CORE,
+        data: data
+      }, {
+        uiOptions: {
+          showWalletUIs: false
+        }
+      });
+      
       toast.success('Payment processed successfully!');
-      
       return true;
     } catch (error: any) {
       return handleError(error, 'Process payment');
     } finally {
       setLoading(false);
     }
-  }, [service, handleError]);
+  }, [sendTransaction, handleError, user]);
 
   const getPayment = useCallback(async (paymentId: number): Promise<PaymentDetails | null> => {
     if (!service) return null;

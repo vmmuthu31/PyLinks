@@ -37,10 +37,16 @@ function ClientProvider({ children }: { children: React.ReactNode }) {
               },
               rpcUrls: {
                 default: {
-                  http: ["https://ethereum-sepolia-rpc.publicnode.com"],
+                  http: [
+                    process.env.NEXT_PUBLIC_RPC_URL ||
+                      "https://ethereum-sepolia-rpc.publicnode.com",
+                  ],
                 },
                 public: {
-                  http: ["https://ethereum-sepolia-rpc.publicnode.com"],
+                  http: [
+                    process.env.NEXT_PUBLIC_RPC_URL ||
+                      "https://ethereum-sepolia-rpc.publicnode.com",
+                  ],
                 },
               },
               blockExplorers: {
@@ -63,10 +69,16 @@ function ClientProvider({ children }: { children: React.ReactNode }) {
             },
             rpcUrls: {
               default: {
-                http: ["https://ethereum-sepolia-rpc.publicnode.com"],
+                http: [
+                  process.env.NEXT_PUBLIC_RPC_URL ||
+                    "https://ethereum-sepolia-rpc.publicnode.com",
+                ],
               },
               public: {
-                http: ["https://ethereum-sepolia-rpc.publicnode.com"],
+                http: [
+                  process.env.NEXT_PUBLIC_RPC_URL ||
+                    "https://ethereum-sepolia-rpc.publicnode.com",
+                ],
               },
             },
             blockExplorers: {

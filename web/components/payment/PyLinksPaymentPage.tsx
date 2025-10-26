@@ -62,7 +62,9 @@ export default function PyLinksPaymentPage() {
 
   // URL parameters - for contract-based payments, we expect paymentId
   const paymentId =
-    searchParams.get("paymentId") || searchParams.get("session");
+    searchParams.get("paymentId") ||
+    searchParams.get("session") ||
+    searchParams.get("request");
 
   useEffect(() => {
     if (ready && paymentId) {
@@ -78,9 +80,11 @@ export default function PyLinksPaymentPage() {
         throw new Error("No payment ID provided");
       }
 
+      console.log("Payment ID:", paymentId);
       // Initialize read-only provider for contract data
       const provider = new ethers.providers.JsonRpcProvider(
-        "https://ethereum-sepolia-rpc.publicnode.com"
+        process.env.NEXT_PUBLIC_RPC_URL ||
+          "https://ethereum-sepolia-rpc.publicnode.com"
       );
       const service = new PyLinksCoreService(provider);
 
@@ -90,6 +94,7 @@ export default function PyLinksPaymentPage() {
       // Check if it looks like a session ID string
       if (
         paymentId.startsWith("payment_") ||
+        paymentId.startsWith("request_") ||
         paymentId.startsWith("ps_") ||
         paymentId.includes("-")
       ) {
@@ -177,7 +182,18 @@ export default function PyLinksPaymentPage() {
   };
 
   const processPayment = async () => {
-    if (!user?.wallet?.address || !paymentDetails) return;
+    if (!user?.wallet?.address || !paymentDetails) {
+      toast.error("Wallet not connected or payment details missing");
+      return;
+    }
+
+    // Validate wallet connection
+    if (!window.ethereum) {
+      toast.error(
+        "No wallet provider found. Please install MetaMask or connect a wallet."
+      );
+      return;
+    }
 
     try {
       setLoading(true);
@@ -188,28 +204,136 @@ export default function PyLinksPaymentPage() {
       const currentBalance = parseFloat(pyusdBalance);
 
       if (currentBalance < requiredAmount) {
-        toast.error("Insufficient PYUSD balance");
+        toast.error(
+          `Insufficient PYUSD balance. Required: ${requiredAmount} PYUSD, Available: ${currentBalance} PYUSD`
+        );
+        setPaymentStatus("error");
         return;
       }
 
       toast.success("Sending PYUSD payment...");
 
-      // PYUSD transfer using Privy sendTransaction
       const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9";
       const amountWei = ethers.utils.parseUnits(paymentDetails.amount, 6); // PYUSD has 6 decimals
-      
-      const transferData = new ethers.utils.Interface([
-        "function transfer(address to, uint256 amount) returns (bool)"
-      ]).encodeFunctionData("transfer", [paymentDetails.merchant, amountWei]);
-      
-      const result = await sendTransaction({
-        to: PYUSD_ADDRESS,
-        data: transferData
-      }, {
-        uiOptions: {
-          showWalletUIs: false // No popup modals
+
+      // Determine payment method based on session ID prefix
+      const isRequestSession = paymentId?.startsWith("request_");
+
+      let result;
+
+      if (isRequestSession) {
+        // Use browser Web3 provider for request_ sessions (allows wallet popup)
+        console.log("Using Web3 provider for request session:", paymentId);
+
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = provider.getSigner();
+
+        // Create contract instances
+        const pyusdContract = new ethers.Contract(
+          PYUSD_ADDRESS,
+          [
+            "function approve(address spender, uint256 amount) returns (bool)",
+            "function allowance(address owner, address spender) view returns (uint256)",
+          ],
+          signer
+        );
+        
+        const pyLinksContract = new ethers.Contract(
+          CONTRACTS.PYLINKS_CORE,
+          ["function processPayment(uint256 paymentId)"],
+          signer
+        );
+
+        // Check current allowance
+        const currentAllowance = await pyusdContract.allowance(
+          user.wallet.address,
+          CONTRACTS.PYLINKS_CORE
+        );
+
+        // Single transaction flow with smart approval
+        if (currentAllowance.lt(amountWei)) {
+          // Need approval - show user it's a 2-step process
+          toast.success("Step 1/2: Approving PYUSD spending...");
+          const approveTx = await pyusdContract.approve(
+            CONTRACTS.PYLINKS_CORE,
+            ethers.constants.MaxUint256 // Approve max amount to avoid future approvals
+          );
+          await approveTx.wait();
+          toast.success("Step 2/2: Processing payment...");
+        } else {
+          toast.success("Processing payment...");
         }
-      });
+
+        // Process payment
+        const tx = await pyLinksContract.processPayment(paymentDetails.id);
+        const receipt = await tx.wait();
+        result = { hash: tx.hash };
+      } else {
+        // Use Privy sendTransaction for payment_ sessions (no popup)
+        console.log(
+          "Using Privy sendTransaction for payment session:",
+          paymentId
+        );
+
+        // Check allowance first using read-only provider
+        const readProvider = new ethers.providers.JsonRpcProvider(
+          process.env.NEXT_PUBLIC_RPC_URL ||
+            "https://ethereum-sepolia-rpc.publicnode.com"
+        );
+        const pyusdReadContract = new ethers.Contract(
+          PYUSD_ADDRESS,
+          ["function allowance(address owner, address spender) view returns (uint256)"],
+          readProvider
+        );
+        
+        const currentAllowance = await pyusdReadContract.allowance(
+          user.wallet.address,
+          CONTRACTS.PYLINKS_CORE
+        );
+
+        // Smart approval - only approve if needed
+        if (currentAllowance.lt(amountWei)) {
+          toast.success("Step 1/2: Approving PYUSD spending...");
+          const approveData = new ethers.utils.Interface([
+            "function approve(address spender, uint256 amount) returns (bool)",
+          ]).encodeFunctionData("approve", [
+            CONTRACTS.PYLINKS_CORE, 
+            ethers.constants.MaxUint256 // Max approval to avoid future approvals
+          ]);
+
+          await sendTransaction(
+            {
+              to: PYUSD_ADDRESS,
+              data: approveData,
+            },
+            {
+              uiOptions: {
+                showWalletUIs: false,
+              },
+            }
+          );
+          toast.success("Step 2/2: Processing payment...");
+        } else {
+          toast.success("Processing payment...");
+        }
+
+        // Process payment
+        const processData = new ethers.utils.Interface([
+          "function processPayment(uint256 paymentId)",
+        ]).encodeFunctionData("processPayment", [paymentDetails.id]);
+
+        result = await sendTransaction(
+          {
+            to: CONTRACTS.PYLINKS_CORE,
+            data: processData,
+          },
+          {
+            uiOptions: {
+              showWalletUIs: false,
+            },
+          }
+        );
+      }
 
       setTxHash(result.hash);
       setPaymentStatus("success");
@@ -225,12 +349,23 @@ export default function PyLinksPaymentPage() {
       console.error("Payment failed:", error);
       setPaymentStatus("error");
 
+      // Enhanced error handling
       if (error.code === 4001) {
         toast.error("Transaction rejected by user");
+      } else if (error.code === "UNSUPPORTED_OPERATION") {
+        toast.error("Wallet connection issue. Please reconnect your wallet.");
+      } else if (error.code === "UNPREDICTABLE_GAS_LIMIT") {
+        toast.error(
+          "Transaction may fail due to gas estimation issues. Please try again."
+        );
       } else if (error.message.includes("insufficient")) {
         toast.error("Insufficient balance for payment");
+      } else if (error.message.includes("user rejected")) {
+        toast.error("Transaction was rejected");
       } else {
-        toast.error(`Payment failed: ${error.message}`);
+        toast.error(
+          `Payment failed: ${error.message || "Unknown error occurred"}`
+        );
       }
     } finally {
       setLoading(false);
@@ -381,19 +516,32 @@ export default function PyLinksPaymentPage() {
                   </AlertDescription>
                 </Alert>
               ) : (
-                <Button
-                  onClick={processPayment}
-                  className="w-full"
-                  size="lg"
-                  disabled={paymentStatus === "success"}
-                >
-                  {loading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <DollarSign className="mr-2 h-4 w-4" />
+                <div className="space-y-3">
+                  {/* Payment method indicator */}
+                  {paymentId?.startsWith("request_") && (
+                    <Alert className="bg-blue-50 border-blue-200">
+                      <Wallet className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-800">
+                        This payment will use your browser wallet (MetaMask). You may see 1-2 confirmation popups depending on your approval status.
+                      </AlertDescription>
+                    </Alert>
                   )}
-                  Pay ${paymentDetails.amount} PYUSD
-                </Button>
+
+                  <Button
+                    onClick={processPayment}
+                    className="w-full"
+                    size="lg"
+                    disabled={paymentStatus === "success"}
+                  >
+                    {loading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <DollarSign className="mr-2 h-4 w-4" />
+                    )}
+                    Pay ${paymentDetails.amount} PYUSD
+                    {paymentId?.startsWith("request_") && " (via Wallet)"}
+                  </Button>
+                </div>
               )}
 
               {/* Rewards Info */}
@@ -413,6 +561,11 @@ export default function PyLinksPaymentPage() {
           <div className="text-center text-xs text-muted-foreground">
             <p>Secured by PyLinksCore smart contract</p>
             <p>Verified on Ethereum Sepolia</p>
+            {paymentId?.startsWith("request_") ? (
+              <p className="text-blue-600 mt-1">Payment via Web3 Provider</p>
+            ) : (
+              <p className="text-green-600 mt-1">Seamless Payment via Privy</p>
+            )}
           </div>
         </CardContent>
       </Card>

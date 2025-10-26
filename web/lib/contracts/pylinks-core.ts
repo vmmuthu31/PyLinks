@@ -10,7 +10,9 @@ export const CONTRACTS = {
 } as const;
 
 // RPC URL for Sepolia
-export const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+export const SEPOLIA_RPC =
+  process.env.NEXT_PUBLIC_RPC_URL ||
+  "https://ethereum-sepolia-rpc.publicnode.com";
 
 export interface PaymentRequest {
   merchant: string;
@@ -144,7 +146,8 @@ export class PyLinksCoreService {
    * Create a regular payment (10min expiry, one-time use)
    */
   async createPayment(
-    request: PaymentRequest
+    request: PaymentRequest,
+    options?: { gasLimit?: number }
   ): Promise<ethers.ContractTransaction> {
     if (!this.signer) throw new Error("Signer required for write operations");
 
@@ -153,6 +156,11 @@ export class PyLinksCoreService {
       ? ethers.utils.formatBytes32String(request.referralCode)
       : ethers.constants.HashZero;
 
+    const txOptions: any = {};
+    if (options?.gasLimit) {
+      txOptions.gasLimit = options.gasLimit;
+    }
+
     return await this.contract.createPayment(
       request.merchant,
       ethers.utils.parseUnits(request.amount, 6), // PYUSD has 6 decimals
@@ -160,7 +168,8 @@ export class PyLinksCoreService {
       request.description,
       referralCode,
       splits,
-      request.isOneTime || true
+      request.isOneTime || true,
+      txOptions
     );
   }
   async getPaymentBySessionId(
