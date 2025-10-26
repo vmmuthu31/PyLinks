@@ -491,11 +491,15 @@ export default function PyLinksPaymentPage() {
   const isExpired = Date.now() / 1000 > paymentDetails.expiresAt;
 
   return (
-    <div className="container mx-auto p-6 max-w-md">
+    <div className="container mx-auto mt-20 p-6 max-w-md">
       <Card>
         <CardHeader className="text-center">
           <CardTitle className="flex items-center justify-center gap-2">
-            <DollarSign className="h-6 w-6" />
+            <img
+              src="/logo.png"
+              alt="PyLinks Logo"
+              className="h-6 w-6 rounded-full"
+            />
             PyLinks Payment
           </CardTitle>
           <CardDescription>
