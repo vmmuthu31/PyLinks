@@ -47,9 +47,10 @@ import {
 } from "lucide-react";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
 import { toast } from "sonner";
+import WalletBalance from "@/components/wallet/WalletBalance";
 
 export default function CleanDashboard() {
-  const { user } = usePrivy();
+  const { user, logout } = usePrivy();
   const router = useRouter();
   const {
     getMerchantEarnings,
@@ -82,7 +83,10 @@ export default function CleanDashboard() {
   }, [user?.wallet?.address, timeRange]);
 
   const loadDashboardData = async () => {
-    if (!user?.wallet?.address) return;
+    if (!user?.wallet?.address) {
+      console.log("⚠️ No wallet address found for user:", user);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -154,6 +158,44 @@ export default function CleanDashboard() {
     },
   ];
 
+  // Check if user has wallet but no address (edge case)
+  if (user && !user.wallet?.address) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">
+              Wallet connection required
+            </p>
+          </div>
+        </div>
+        
+        <Alert className="max-w-2xl">
+          <Wallet className="h-4 w-4" />
+          <AlertDescription>
+            Your wallet connection seems to be missing. Please logout and login again to reconnect your wallet.
+          </AlertDescription>
+        </Alert>
+        
+        <Button 
+          onClick={async () => {
+            try {
+              await logout();
+              router.push("/");
+            } catch (error) {
+              console.error("Logout error:", error);
+              router.push("/");
+            }
+          }}
+          variant="outline"
+        >
+          Logout and Reconnect
+        </Button>
+      </div>
+    );
+  }
+  
   if (loading || coreLoading) {
     return (
       <div className="space-y-6">
@@ -214,8 +256,119 @@ export default function CleanDashboard() {
         </div>
       </div>
 
+      {/* Wallet Balance Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <WalletBalance showHeader={true} compact={false} />
+        </div>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5" />
+                Quick Actions
+              </CardTitle>
+              <CardDescription>Fast access to common tasks</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {quickActions.slice(0, 3).map((action, index) => {
+                const Icon = action.icon;
+                return (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    className="w-full justify-start h-auto p-3"
+                    onClick={() => router.push(action.href)}
+                  >
+                    <div className={`w-8 h-8 rounded-full ${action.color} flex items-center justify-center mr-3`}>
+                      <Icon className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-sm">{action.title}</p>
+                      <p className="text-xs text-muted-foreground">{action.description}</p>
+                    </div>
+                  </Button>
+                );
+              })}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
       {/* Key Metrics */}
-      {/*  */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Revenue</p>
+                <p className="text-2xl font-bold">${stats.totalRevenue}</p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <DollarSign className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+            <div className="flex items-center mt-2">
+              <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
+              <span className="text-xs text-green-600 font-medium">{stats.growth.revenue}</span>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Payments</p>
+                <p className="text-2xl font-bold">{stats.totalPayments}</p>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <Receipt className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+            <div className="flex items-center mt-2">
+              <TrendingUp className="h-3 w-3 text-blue-600 mr-1" />
+              <span className="text-xs text-blue-600 font-medium">{stats.growth.payments}</span>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Avg Payment</p>
+                <p className="text-2xl font-bold">${stats.averagePayment}</p>
+              </div>
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                <BarChart3 className="h-6 w-6 text-purple-600" />
+              </div>
+            </div>
+            <div className="flex items-center mt-2">
+              <TrendingUp className="h-3 w-3 text-purple-600 mr-1" />
+              <span className="text-xs text-purple-600 font-medium">+5.2%</span>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Active Payments</p>
+                <p className="text-2xl font-bold">{stats.activePayments}</p>
+              </div>
+              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                <Clock className="h-6 w-6 text-orange-600" />
+              </div>
+            </div>
+            <div className="flex items-center mt-2">
+              <Activity className="h-3 w-3 text-orange-600 mr-1" />
+              <span className="text-xs text-orange-600 font-medium">Live</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Analytics & Gamification */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

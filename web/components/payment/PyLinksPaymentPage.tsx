@@ -45,7 +45,7 @@ const PYUSD_ABI = [
 export default function PyLinksPaymentPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { ready, authenticated, user, login, linkWallet } = usePrivy();
+  const { ready, authenticated, user, login, linkWallet, logout } = usePrivy();
   const { sendTransaction } = useSendTransaction();
 
   const [loading, setLoading] = useState(false);
@@ -68,9 +68,17 @@ export default function PyLinksPaymentPage() {
 
   useEffect(() => {
     if (ready && paymentId) {
+      // For request_ sessions, logout Privy to use MetaMask directly
+      if (paymentId.startsWith("request_") && authenticated) {
+        console.log(
+          "🚪 Logging out Privy for request session - will use MetaMask directly"
+        );
+        logout();
+        return;
+      }
       initializePayment();
     }
-  }, [ready, paymentId]);
+  }, [ready, paymentId, authenticated, logout]);
 
   const initializePayment = async () => {
     try {
@@ -166,26 +174,21 @@ export default function PyLinksPaymentPage() {
       console.error("Error loading balances:", error);
     }
   };
-
-  const handleWalletConnect = async () => {
-    if (!ready) return;
-
-    try {
-      if (!authenticated) {
-        await login();
-      } else if (!user?.wallet) {
-        await linkWallet();
-      }
-    } catch (error) {
-      console.error("Wallet connection error:", error);
-      toast.error("Failed to connect wallet");
-    }
-  };
-
   const processPayment = async () => {
-    if (!user?.wallet?.address || !paymentDetails) {
-      toast.error("Wallet not connected or payment details missing");
-      return;
+    const isRequestSession = paymentId?.startsWith("request_") || false;
+
+    if (isRequestSession) {
+      // For request sessions, check MetaMask connection
+      if (!window.ethereum || !paymentDetails) {
+        toast.error("MetaMask not connected or payment details missing");
+        return;
+      }
+    } else {
+      // For payment sessions, check Privy connection
+      if (!user?.wallet?.address || !paymentDetails) {
+        toast.error("Wallet not connected or payment details missing");
+        return;
+      }
     }
 
     // Validate wallet connection
@@ -200,17 +203,7 @@ export default function PyLinksPaymentPage() {
       setLoading(true);
       setPaymentStatus("processing");
 
-      // Check PYUSD balance
       const requiredAmount = parseFloat(paymentDetails.amount);
-      const currentBalance = parseFloat(pyusdBalance);
-
-      if (currentBalance < requiredAmount) {
-        toast.error(
-          `Insufficient PYUSD balance. Required: ${requiredAmount} PYUSD, Available: ${currentBalance} PYUSD`
-        );
-        setPaymentStatus("error");
-        return;
-      }
 
       toast.success("Sending PYUSD payment...");
 
@@ -218,7 +211,7 @@ export default function PyLinksPaymentPage() {
       const amountWei = ethers.utils.parseUnits(paymentDetails.amount, 6); // PYUSD has 6 decimals
 
       // Determine payment method based on session ID prefix
-      const isRequestSession = paymentId?.startsWith("request_");
+      const isRequestSession = paymentId?.startsWith("request_") || false;
 
       let result;
 
@@ -245,9 +238,12 @@ export default function PyLinksPaymentPage() {
           signer
         );
 
-        // Check current allowance
+        // Get MetaMask address
+        const metaMaskAddress = await signer.getAddress();
+
+        // Check current allowance using actual MetaMask address
         const currentAllowance = await pyusdContract.allowance(
-          user.wallet.address,
+          metaMaskAddress,
           CONTRACTS.PYLINKS_CORE
         );
 
@@ -265,7 +261,63 @@ export default function PyLinksPaymentPage() {
           toast.success("Processing payment...");
         }
 
+        // Debug payment details before processing
+        console.log("🔍 Payment Debug Info:");
+        console.log("- Payment ID:", paymentDetails.id);
+        console.log("- Payment Status:", paymentDetails.status);
+        console.log("- Payment Amount:", paymentDetails.amount);
+        console.log("- Current Customer:", paymentDetails.customer);
+        console.log("- Merchant Address:", paymentDetails.merchant);
+        console.log("- Paying Address (MetaMask):", metaMaskAddress);
+        console.log("- Expires At:", new Date(paymentDetails.expiresAt * 1000));
+        console.log("- Current Time:", new Date());
+        console.log(
+          "- Is Expired:",
+          Date.now() / 1000 > paymentDetails.expiresAt
+        );
+
+        // Check if payment is expired
+        if (Date.now() / 1000 > paymentDetails.expiresAt) {
+          toast.error("❌ Payment has expired and can no longer be processed");
+          setPaymentStatus("error");
+          return;
+        }
+
+        // Note: In production, typically different customers pay merchant requests
+        // For testing purposes, we'll allow self-payment
+        if (
+          paymentDetails.merchant.toLowerCase() ===
+          metaMaskAddress.toLowerCase()
+        ) {
+          console.log(
+            "⚠️ Warning: Merchant is paying their own payment request (testing scenario)"
+          );
+        }
+
+        // Get actual MetaMask address
+        const actualSigner = await signer.getAddress();
+        console.log("- Actual MetaMask Address:", actualSigner);
+
+        // For request sessions, we only use MetaMask address
+        console.log(
+          "✅ Using MetaMask address for request session:",
+          actualSigner
+        );
+
+        // Check PYUSD allowance using actual MetaMask address
+        const allowance = await pyusdContract.allowance(
+          metaMaskAddress,
+          CONTRACTS.PYLINKS_CORE
+        );
+        console.log(
+          "- PYUSD Allowance:",
+          ethers.utils.formatUnits(allowance, 6)
+        );
+        console.log("- Required Amount:", paymentDetails.amount);
+        console.log("- Sufficient Allowance:", allowance.gte(amountWei));
+
         // Process payment
+        console.log("🚀 Attempting to process payment...");
         const tx = await pyLinksContract.processPayment(paymentDetails.id);
         const receipt = await tx.wait();
         result = { hash: tx.hash };
@@ -290,7 +342,7 @@ export default function PyLinksPaymentPage() {
         );
 
         const currentAllowance = await pyusdReadContract.allowance(
-          user.wallet.address,
+          user?.wallet?.address || "",
           CONTRACTS.PYLINKS_CORE
         );
 
@@ -349,8 +401,40 @@ export default function PyLinksPaymentPage() {
         toast.success(`🎉 You earned ${spinCredits} spin credits!`);
       }
     } catch (error: any) {
-      console.error("Payment failed:", error);
+      console.error("❌ Payment failed:", error);
+      console.error("❌ Error details:", {
+        message: error.message,
+        code: error.code,
+        data: error.data,
+        reason: error.reason,
+      });
+
       setPaymentStatus("error");
+
+      // Decode specific contract errors
+      let errorMessage = "Payment failed";
+
+      if (error.data === "0x13be252b") {
+        errorMessage =
+          "Payment not available - you may be trying to pay your own payment or it's already processed";
+      } else if (error.data === "0x2d0a346e") {
+        errorMessage = "Payment expired";
+      } else if (error.data === "0x664b28b0") {
+        errorMessage = "Payment has expired and can no longer be processed";
+      } else if (error.data === "0x8f4eb604") {
+        errorMessage = "Payment not found";
+      } else if (error.data === "0x90b8ec18") {
+        errorMessage = "Transfer failed (insufficient balance or allowance)";
+      } else if (error.message?.includes("insufficient")) {
+        errorMessage = "Insufficient PYUSD balance";
+      } else if (error.message?.includes("allowance")) {
+        errorMessage = "Insufficient PYUSD allowance";
+      } else if (error.code === "UNPREDICTABLE_GAS_LIMIT") {
+        errorMessage =
+          "Transaction will fail - check payment status and balances";
+      }
+
+      toast.error(errorMessage);
 
       // Enhanced error handling
       if (error.code === 4001) {
@@ -404,6 +488,8 @@ export default function PyLinksPaymentPage() {
     );
   }
 
+  const isExpired = Date.now() / 1000 > paymentDetails.expiresAt;
+
   return (
     <div className="container mx-auto p-6 max-w-md">
       <Card>
@@ -452,13 +538,19 @@ export default function PyLinksPaymentPage() {
                 </span>
               </div>
 
-              {timeRemaining && timeRemaining !== "Expired" && (
+              {timeRemaining && (
                 <div className="flex justify-between text-sm">
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    Expires in:
+                    {timeRemaining === "Expired" ? "Status:" : "Expires in:"}
                   </span>
-                  <span className="font-medium text-orange-600">
+                  <span
+                    className={`font-medium ${
+                      timeRemaining === "Expired"
+                        ? "text-red-600"
+                        : "text-orange-600"
+                    }`}
+                  >
                     {timeRemaining}
                   </span>
                 </div>
@@ -484,83 +576,31 @@ export default function PyLinksPaymentPage() {
             </Alert>
           )}
 
-          {paymentStatus === "error" && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800">
-                Payment failed. Please try again.
-              </AlertDescription>
-            </Alert>
-          )}
+          <Button
+            onClick={processPayment}
+            className="w-full"
+            size="lg"
+            disabled={paymentStatus === "success"}
+          >
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <DollarSign className="mr-2 h-4 w-4" />
+            )}
+            Pay ${paymentDetails.amount} PYUSD
+            {paymentId?.startsWith("request_") && " (via Wallet)"}
+          </Button>
 
-          {/* Wallet Connection */}
-          {!authenticated || !user?.wallet ? (
-            <Button onClick={handleWalletConnect} className="w-full" size="lg">
-              <Wallet className="mr-2 h-4 w-4" />
-              Connect Wallet to Pay
-            </Button>
-          ) : (
-            <div className="space-y-4">
-              {/* User Balance */}
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <div className="flex justify-between text-sm">
-                  <span>Your PYUSD Balance:</span>
-                  <span className="font-medium">${pyusdBalance}</span>
-                </div>
-              </div>
-
-              {/* Payment Actions */}
-              {parseFloat(pyusdBalance) < parseFloat(paymentDetails.amount) ? (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    Insufficient PYUSD balance. You need $
-                    {paymentDetails.amount} PYUSD to complete this payment.
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <div className="space-y-3">
-                  {/* Payment method indicator */}
-                  {paymentId?.startsWith("request_") && (
-                    <Alert className="bg-blue-50 border-blue-200">
-                      <Wallet className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-blue-800">
-                        This payment will use your browser wallet (MetaMask).
-                        You may see 1-2 confirmation popups depending on your
-                        approval status.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  <Button
-                    onClick={processPayment}
-                    className="w-full"
-                    size="lg"
-                    disabled={paymentStatus === "success"}
-                  >
-                    {loading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <DollarSign className="mr-2 h-4 w-4" />
-                    )}
-                    Pay ${paymentDetails.amount} PYUSD
-                    {paymentId?.startsWith("request_") && " (via Wallet)"}
-                  </Button>
-                </div>
-              )}
-
-              {/* Rewards Info */}
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <div className="flex items-center gap-2 text-sm text-blue-800">
-                  <Gift className="h-4 w-4" />
-                  <span>
-                    Earn {Math.floor(parseFloat(paymentDetails.amount))} spin
-                    credits with this payment!
-                  </span>
-                </div>
-              </div>
+          {/* Rewards Info */}
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <div className="flex items-center gap-2 text-sm text-blue-800">
+              <Gift className="h-4 w-4" />
+              <span>
+                Earn {Math.floor(parseFloat(paymentDetails.amount))} spin
+                credits with this payment!
+              </span>
             </div>
-          )}
+          </div>
 
           {/* Security Info */}
           <div className="text-center text-xs text-muted-foreground">

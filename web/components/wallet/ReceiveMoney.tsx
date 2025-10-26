@@ -39,6 +39,7 @@ import {
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
 import { toast } from "sonner";
 import QRCodeLib from "qrcode";
+import WalletBalance from "@/components/wallet/WalletBalance";
 
 interface PendingPayment {
   id: number;
@@ -194,6 +195,9 @@ export default function ReceiveMoney() {
         </p>
       </div>
 
+      {/* Wallet Balance Display */}
+      <WalletBalance showHeader={true} compact={false} />
+      
       <Alert>
         <Wallet className="h-4 w-4" />
         <AlertDescription>
