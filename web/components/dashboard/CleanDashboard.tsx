@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -52,6 +52,7 @@ import WalletBalance from "@/components/wallet/WalletBalance";
 export default function CleanDashboard() {
   const { user, logout } = usePrivy();
   const router = useRouter();
+  const pathname = usePathname();
   const {
     getMerchantEarnings,
     getMerchantPayments,
@@ -165,20 +166,19 @@ export default function CleanDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">
-              Wallet connection required
-            </p>
+            <p className="text-muted-foreground">Wallet connection required</p>
           </div>
         </div>
-        
+
         <Alert className="max-w-2xl">
           <Wallet className="h-4 w-4" />
           <AlertDescription>
-            Your wallet connection seems to be missing. Please logout and login again to reconnect your wallet.
+            Your wallet connection seems to be missing. Please logout and login
+            again to reconnect your wallet.
           </AlertDescription>
         </Alert>
-        
-        <Button 
+
+        <Button
           onClick={async () => {
             try {
               await logout();
@@ -195,7 +195,7 @@ export default function CleanDashboard() {
       </div>
     );
   }
-  
+
   if (loading || coreLoading) {
     return (
       <div className="space-y-6">
@@ -256,44 +256,50 @@ export default function CleanDashboard() {
         </div>
       </div>
 
-      {/* Wallet Balance Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <WalletBalance showHeader={true} compact={false} />
+      {/* Wallet Balance Section - Only show on main dashboard */}
+      {pathname === "/dashboard" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <WalletBalance showHeader={true} compact={false} />
+          </div>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  Quick Actions
+                </CardTitle>
+                <CardDescription>Fast access to common tasks</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {quickActions.slice(0, 3).map((action, index) => {
+                  const Icon = action.icon;
+                  return (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      className="w-full justify-start h-auto p-3"
+                      onClick={() => router.push(action.href)}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-full ${action.color} flex items-center justify-center mr-3`}
+                      >
+                        <Icon className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium text-sm">{action.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {action.description}
+                        </p>
+                      </div>
+                    </Button>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </div>
         </div>
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5" />
-                Quick Actions
-              </CardTitle>
-              <CardDescription>Fast access to common tasks</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {quickActions.slice(0, 3).map((action, index) => {
-                const Icon = action.icon;
-                return (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    className="w-full justify-start h-auto p-3"
-                    onClick={() => router.push(action.href)}
-                  >
-                    <div className={`w-8 h-8 rounded-full ${action.color} flex items-center justify-center mr-3`}>
-                      <Icon className="h-4 w-4 text-white" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-medium text-sm">{action.title}</p>
-                      <p className="text-xs text-muted-foreground">{action.description}</p>
-                    </div>
-                  </Button>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      )}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -310,11 +316,13 @@ export default function CleanDashboard() {
             </div>
             <div className="flex items-center mt-2">
               <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
-              <span className="text-xs text-green-600 font-medium">{stats.growth.revenue}</span>
+              <span className="text-xs text-green-600 font-medium">
+                {stats.growth.revenue}
+              </span>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -328,11 +336,13 @@ export default function CleanDashboard() {
             </div>
             <div className="flex items-center mt-2">
               <TrendingUp className="h-3 w-3 text-blue-600 mr-1" />
-              <span className="text-xs text-blue-600 font-medium">{stats.growth.payments}</span>
+              <span className="text-xs text-blue-600 font-medium">
+                {stats.growth.payments}
+              </span>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -350,7 +360,7 @@ export default function CleanDashboard() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">

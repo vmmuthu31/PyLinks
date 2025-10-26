@@ -59,6 +59,7 @@ export default function PyLinksPaymentPage() {
   const [timeRemaining, setTimeRemaining] = useState<string>("");
   const [pyusdBalance, setPyusdBalance] = useState<string>("0");
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [walletConnected, setWalletConnected] = useState(false);
 
   // URL parameters - for contract-based payments, we expect paymentId
   const paymentId =
@@ -79,6 +80,20 @@ export default function PyLinksPaymentPage() {
       initializePayment();
     }
   }, [ready, paymentId, authenticated, logout]);
+
+  // Check wallet connection for request sessions
+  useEffect(() => {
+    const checkConnection = async () => {
+      if (paymentId?.startsWith("request_")) {
+        const connected = await checkWalletConnection();
+        setWalletConnected(connected);
+      }
+    };
+    
+    if (paymentId && !sessionLoading) {
+      checkConnection();
+    }
+  }, [paymentId, sessionLoading]);
 
   const initializePayment = async () => {
     try {
@@ -174,13 +189,78 @@ export default function PyLinksPaymentPage() {
       console.error("Error loading balances:", error);
     }
   };
+  // Check if wallet is connected (for request sessions)
+  const checkWalletConnection = async () => {
+    if (!window.ethereum) return false;
+    
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      await signer.getAddress();
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  const connectWallet = async () => {
+    try {
+      if (!window.ethereum) {
+        toast.error("Please install MetaMask or another Web3 wallet");
+        return false;
+      }
+
+      // Request account access
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      
+      // Verify connection
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const address = await signer.getAddress();
+      
+      setWalletConnected(true);
+      toast.success(`Wallet connected: ${address.slice(0, 6)}...${address.slice(-4)}`);
+      return true;
+    } catch (error: any) {
+      console.error("Wallet connection failed:", error);
+      setWalletConnected(false);
+      if (error.code === 4001) {
+        toast.error("Wallet connection rejected by user");
+      } else {
+        toast.error("Failed to connect wallet. Please try again.");
+      }
+      return false;
+    }
+  };
+
   const processPayment = async () => {
     const isRequestSession = paymentId?.startsWith("request_") || false;
 
     if (isRequestSession) {
       // For request sessions, check MetaMask connection
-      if (!window.ethereum || !paymentDetails) {
-        toast.error("MetaMask not connected or payment details missing");
+      if (!window.ethereum) {
+        toast.error("Please install MetaMask or another Web3 wallet");
+        return;
+      }
+
+      // Check if wallet is connected
+      try {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = provider.getSigner();
+        await signer.getAddress(); // This will throw if not connected
+      } catch (error: any) {
+        if (error.code === "UNSUPPORTED_OPERATION") {
+          toast.error("Please connect your wallet first");
+          const connected = await connectWallet();
+          if (!connected) return;
+        } else {
+          toast.error("Wallet connection issue. Please reconnect your wallet.");
+          return;
+        }
+      }
+
+      if (!paymentDetails) {
+        toast.error("Payment details missing");
         return;
       }
     } else {
@@ -580,20 +660,40 @@ export default function PyLinksPaymentPage() {
             </Alert>
           )}
 
-          <Button
-            onClick={processPayment}
-            className="w-full"
-            size="lg"
-            disabled={paymentStatus === "success"}
-          >
-            {loading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <DollarSign className="mr-2 h-4 w-4" />
-            )}
-            Pay ${paymentDetails.amount} PYUSD
-            {paymentId?.startsWith("request_") && " (via Wallet)"}
-          </Button>
+          {paymentId?.startsWith("request_") && !walletConnected ? (
+            <div className="space-y-3">
+              <Alert className="border-blue-200 bg-blue-50">
+                <Wallet className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-800">
+                  Connect your Web3 wallet (MetaMask, etc.) to complete this payment.
+                </AlertDescription>
+              </Alert>
+              <Button
+                onClick={connectWallet}
+                className="w-full"
+                size="lg"
+                variant="outline"
+              >
+                <Wallet className="mr-2 h-4 w-4" />
+                Connect Wallet to Pay
+              </Button>
+            </div>
+          ) : (
+            <Button
+              onClick={processPayment}
+              className="w-full"
+              size="lg"
+              disabled={paymentStatus === "success" || isExpired}
+            >
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <DollarSign className="mr-2 h-4 w-4" />
+              )}
+              {isExpired ? "Payment Expired" : `Pay $${paymentDetails.amount} PYUSD`}
+              {paymentId?.startsWith("request_") && " (via Wallet)"}
+            </Button>
+          )}
 
           {/* Rewards Info */}
           <div className="p-3 bg-blue-50 rounded-lg">

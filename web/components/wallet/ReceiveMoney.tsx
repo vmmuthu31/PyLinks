@@ -196,8 +196,8 @@ export default function ReceiveMoney() {
       </div>
 
       {/* Wallet Balance Display */}
-      <WalletBalance showHeader={true} compact={false} />
-      
+      {/* <WalletBalance showHeader={true} compact={false} /> */}
+
       <Alert>
         <Wallet className="h-4 w-4" />
         <AlertDescription>
