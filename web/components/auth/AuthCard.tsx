@@ -355,8 +355,12 @@ No wallet signature required for this authentication method.`;
       <div className="w-full max-w-md">
         {/* Logo and Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-lg mb-4">
-            <Store className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16  rounded-2xl mb-4">
+            <img
+              src="/logo.png"
+              alt="PyLinks Logo"
+              className="h-16 w-16 rounded-full"
+            />{" "}
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             PyLinks

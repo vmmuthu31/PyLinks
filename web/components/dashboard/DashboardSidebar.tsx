@@ -264,9 +264,11 @@ export default function DashboardSidebar({ className }: DashboardSidebarProps) {
     >
       {/* Header */}
       <div className="flex h-16 items-center gap-3 px-4 border-b">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Zap className="h-4 w-4" />
-        </div>
+        <img
+          src="/logo.png"
+          alt="PyLinks Logo"
+          className="h-8 w-8 rounded-full"
+        />
         <div className="flex flex-col">
           <span className="text-sm font-semibold">PyLinks</span>
           <span className="text-xs text-muted-foreground">
