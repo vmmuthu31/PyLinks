@@ -78,24 +78,50 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
   // Initialize service when wallet is connected
   useEffect(() => {
     const initializeService = async () => {
-      if (ready && user?.wallet?.address && window.ethereum) {
-        const isValid = await validateWalletConnection();
-        
-        if (isValid) {
-          try {
-            const provider = new ethers.providers.Web3Provider(window.ethereum);
-            const signer = provider.getSigner();
-            const pyLinksService = new PyLinksCoreService(signer);
-            setService(pyLinksService);
-            setError(null);
-          } catch (err: any) {
-            setError(`Failed to initialize PyLinksCore service: ${err.message}`);
-            console.error('PyLinksCore initialization error:', err);
+      console.log('🔄 Initializing PyLinksCore service...');
+      console.log('Ready:', ready);
+      console.log('User wallet:', user?.wallet?.address);
+      console.log('Window ethereum:', !!window.ethereum);
+      
+      if (ready && user?.wallet?.address) {
+        try {
+          if (window.ethereum) {
+            // Try to create service with signer for write operations
+            const isValid = await validateWalletConnection();
+            
+            if (isValid) {
+              const provider = new ethers.providers.Web3Provider(window.ethereum);
+              const signer = provider.getSigner();
+              const pyLinksService = new PyLinksCoreService(signer);
+              setService(pyLinksService);
+              console.log('✅ PyLinksCore service initialized with signer');
+              setError(null);
+              return;
+            }
           }
-        } else {
-          setService(null);
+          
+          // Fallback: Create read-only service for data fetching
+          console.log('🔄 Creating read-only PyLinksCore service...');
+          const pyLinksService = new PyLinksCoreService(); // No signer = read-only
+          setService(pyLinksService);
+          console.log('✅ PyLinksCore service initialized (read-only)');
+          setError(null);
+        } catch (err: any) {
+          console.error('❌ PyLinksCore initialization error:', err);
+          setError(`Failed to initialize PyLinksCore service: ${err.message}`);
+          
+          // Still try to create read-only service as fallback
+          try {
+            const pyLinksService = new PyLinksCoreService();
+            setService(pyLinksService);
+            console.log('✅ Fallback: PyLinksCore service initialized (read-only)');
+          } catch (fallbackErr) {
+            console.error('❌ Fallback service creation failed:', fallbackErr);
+            setService(null);
+          }
         }
       } else {
+        console.log('❌ Service not initialized: missing requirements');
         setService(null);
       }
     };
@@ -366,22 +392,39 @@ export function usePyLinksCore(): UsePyLinksCoreReturn {
 
   // Utility functions
   const getSpinCredits = useCallback(async (user: string): Promise<string> => {
-    if (!service) return '0';
+    console.log('🎯 Getting spin credits for user:', user);
+    console.log('🔧 Service initialized:', !!service);
+    
+    if (!service) {
+      console.log('❌ PyLinksCore service not initialized');
+      return '0';
+    }
 
     try {
-      return await service.getSpinCredits(user);
+      const credits = await service.getSpinCredits(user);
+      console.log('✅ Spin credits fetched from contract:', credits);
+      return credits;
     } catch (error: any) {
+      console.error('❌ Error fetching spin credits:', error);
       handleError(error, 'Get spin credits');
       return '0';
     }
   }, [service, handleError]);
 
   const getLoyaltyPoints = useCallback(async (user: string): Promise<string> => {
-    if (!service) return '0';
+    console.log('🎯 Getting loyalty points for user:', user);
+    
+    if (!service) {
+      console.log('❌ PyLinksCore service not initialized');
+      return '0';
+    }
 
     try {
-      return await service.getLoyaltyPoints(user);
+      const points = await service.getLoyaltyPoints(user);
+      console.log('✅ Loyalty points fetched from contract:', points);
+      return points;
     } catch (error: any) {
+      console.error('❌ Error fetching loyalty points:', error);
       handleError(error, 'Get loyalty points');
       return '0';
     }

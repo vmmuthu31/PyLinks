@@ -13,28 +13,28 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  DollarSign, 
-  TrendingUp, 
+  DollarSign,
+  TrendingUp,
   TrendingDown,
-  BarChart3, 
-  ArrowUpRight, 
-  ArrowDownRight, 
-  Plus, 
-  Users, 
-  Activity, 
-  Send, 
-  Receipt, 
-  Clock, 
-  CheckCircle, 
-  Star, 
+  BarChart3,
+  ArrowUpRight,
+  ArrowDownRight,
+  Plus,
+  Users,
+  Activity,
+  Send,
+  Receipt,
+  Clock,
+  CheckCircle,
+  Star,
   Zap,
   Gift,
   Crown,
@@ -43,7 +43,7 @@ import {
   Wallet,
   Eye,
   FileText,
-  Loader2
+  Loader2,
 } from "lucide-react";
 import { usePyLinksCore } from "@/hooks/usePyLinksCore";
 import { toast } from "sonner";
@@ -51,14 +51,14 @@ import { toast } from "sonner";
 export default function CleanDashboard() {
   const { user } = usePrivy();
   const router = useRouter();
-  const { 
-    getMerchantEarnings, 
-    getMerchantPayments, 
-    getSpinCredits, 
+  const {
+    getMerchantEarnings,
+    getMerchantPayments,
+    getSpinCredits,
     getLoyaltyPoints,
-    loading: coreLoading
+    loading: coreLoading,
   } = usePyLinksCore();
-  
+
   const [timeRange, setTimeRange] = useState("7d");
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -73,8 +73,8 @@ export default function CleanDashboard() {
     growth: {
       revenue: "+12.5%",
       payments: "+8.3%",
-      conversion: "+2.1%"
-    }
+      conversion: "+2.1%",
+    },
   });
 
   useEffect(() => {
@@ -96,7 +96,8 @@ export default function CleanDashboard() {
 
       const totalRevenue = parseFloat(earnings);
       const totalPayments = paymentIds.length;
-      const averagePayment = totalPayments > 0 ? totalRevenue / totalPayments : 0;
+      const averagePayment =
+        totalPayments > 0 ? totalRevenue / totalPayments : 0;
       const totalFees = totalRevenue * 0.001; // 0.1% platform fee
 
       setStats({
@@ -110,9 +111,9 @@ export default function CleanDashboard() {
         totalFees: totalFees.toFixed(2),
         growth: {
           revenue: "+12.5%",
-          payments: "+8.3%", 
-          conversion: "+2.1%"
-        }
+          payments: "+8.3%",
+          conversion: "+2.1%",
+        },
       });
     } catch (error) {
       console.error("Error loading dashboard data:", error);
@@ -128,29 +129,29 @@ export default function CleanDashboard() {
       description: "Generate new payment link",
       icon: Plus,
       href: "/dashboard/payments/create",
-      color: "bg-blue-500"
+      color: "bg-blue-500",
     },
     {
       title: "Send Money",
       description: "Transfer funds directly",
       icon: Send,
       href: "/dashboard/wallet/send",
-      color: "bg-green-500"
+      color: "bg-green-500",
     },
     {
       title: "Bulk Payments",
       description: "Send to multiple recipients",
       icon: Users,
       href: "/dashboard/bulk/multiple",
-      color: "bg-purple-500"
+      color: "bg-purple-500",
     },
     {
       title: "Spin & Win",
       description: "Use your spin credits",
       icon: Zap,
       href: "/dashboard/gamification",
-      color: "bg-yellow-500"
-    }
+      color: "bg-yellow-500",
+    },
   ];
 
   if (loading || coreLoading) {
@@ -159,10 +160,12 @@ export default function CleanDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">Loading your PyLinks overview...</p>
+            <p className="text-muted-foreground">
+              Loading your PyLinks overview...
+            </p>
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
@@ -178,7 +181,7 @@ export default function CleanDashboard() {
             </Card>
           ))}
         </div>
-        
+
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
         </div>
@@ -212,109 +215,7 @@ export default function CleanDashboard() {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold">${stats.totalRevenue}</p>
-                <p className="text-xs text-green-600 flex items-center">
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  {stats.growth.revenue}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Total Payments</p>
-                <p className="text-2xl font-bold">{stats.totalPayments}</p>
-                <p className="text-xs text-green-600 flex items-center">
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  {stats.growth.payments}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <Receipt className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Avg Payment</p>
-                <p className="text-2xl font-bold">${stats.averagePayment}</p>
-                <p className="text-xs text-green-600 flex items-center">
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  {stats.growth.conversion}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <BarChart3 className="h-6 w-6 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Active Payments</p>
-                <p className="text-2xl font-bold">{stats.activePayments}</p>
-                <p className="text-xs text-blue-600 flex items-center">
-                  <Clock className="h-3 w-3 mr-1" />
-                  Pending
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                <Activity className="h-6 w-6 text-orange-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>
-            Get started with common tasks
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {quickActions.map((action, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                className="h-24 flex-col gap-2 hover:shadow-md transition-shadow"
-                onClick={() => router.push(action.href)}
-              >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${action.color}`}>
-                  <action.icon className="h-4 w-4 text-white" />
-                </div>
-                <div className="text-center">
-                  <p className="font-medium text-sm">{action.title}</p>
-                  <p className="text-xs text-muted-foreground">{action.description}</p>
-                </div>
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/*  */}
 
       {/* Analytics & Gamification */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -324,9 +225,7 @@ export default function CleanDashboard() {
               <BarChart3 className="h-5 w-5" />
               Performance Analytics
             </CardTitle>
-            <CardDescription>
-              Your payment processing insights
-            </CardDescription>
+            <CardDescription>Your payment processing insights</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -339,18 +238,25 @@ export default function CleanDashboard() {
                 <p className="text-lg font-bold">${stats.totalFees}</p>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Payment Success Rate</span>
                 <span className="font-medium">94.2%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-green-500 h-2 rounded-full" style={{ width: '94.2%' }}></div>
+                <div
+                  className="bg-green-500 h-2 rounded-full"
+                  style={{ width: "94.2%" }}
+                ></div>
               </div>
             </div>
 
-            <Button variant="outline" className="w-full" onClick={() => router.push("/dashboard/payments/history")}>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push("/dashboard/payments/history")}
+            >
               <FileText className="h-4 w-4 mr-2" />
               View Detailed Reports
             </Button>
@@ -363,9 +269,7 @@ export default function CleanDashboard() {
               <Zap className="h-5 w-5" />
               Rewards & Gamification
             </CardTitle>
-            <CardDescription>
-              Your loyalty status and rewards
-            </CardDescription>
+            <CardDescription>Your loyalty status and rewards</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -383,11 +287,16 @@ export default function CleanDashboard() {
               <Crown className="h-5 w-5 text-yellow-600" />
               <div>
                 <p className="font-medium">Silver Tier</p>
-                <p className="text-sm text-muted-foreground">1,250 points to Gold</p>
+                <p className="text-sm text-muted-foreground">
+                  1,250 points to Gold
+                </p>
               </div>
             </div>
 
-            <Button className="w-full" onClick={() => router.push("/dashboard/gamification")}>
+            <Button
+              className="w-full"
+              onClick={() => router.push("/dashboard/gamification")}
+            >
               <Zap className="h-4 w-4 mr-2" />
               Play Spin & Win
             </Button>
@@ -412,39 +321,50 @@ export default function CleanDashboard() {
                 description: "$25.00 from 0x123...abc",
                 time: "2 minutes ago",
                 icon: ArrowDownRight,
-                color: "text-green-600"
+                color: "text-green-600",
               },
               {
                 type: "bulk",
-                title: "Bulk Payment Sent", 
+                title: "Bulk Payment Sent",
                 description: "5 payments totaling $150.00",
                 time: "1 hour ago",
                 icon: Users,
-                color: "text-blue-600"
+                color: "text-blue-600",
               },
               {
                 type: "reward",
                 title: "Spin Credits Earned",
                 description: "Earned 3 spin credits",
-                time: "3 hours ago", 
+                time: "3 hours ago",
                 icon: Zap,
-                color: "text-yellow-600"
-              }
+                color: "text-yellow-600",
+              },
             ].map((activity, index) => (
-              <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
-                <div className={`w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center`}>
+              <div
+                key={index}
+                className="flex items-center gap-3 p-3 border rounded-lg"
+              >
+                <div
+                  className={`w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center`}
+                >
                   <activity.icon className={`h-5 w-5 ${activity.color}`} />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium">{activity.title}</p>
-                  <p className="text-sm text-muted-foreground">{activity.description}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {activity.description}
+                  </p>
                 </div>
                 <p className="text-xs text-muted-foreground">{activity.time}</p>
               </div>
             ))}
           </div>
-          
-          <Button variant="outline" className="w-full mt-4" onClick={() => router.push("/dashboard/notifications")}>
+
+          <Button
+            variant="outline"
+            className="w-full mt-4"
+            onClick={() => router.push("/dashboard/notifications")}
+          >
             <Eye className="h-4 w-4 mr-2" />
             View All Activity
           </Button>

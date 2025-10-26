@@ -150,7 +150,8 @@ export default function PyLinksPaymentPage() {
 
     try {
       const provider = new ethers.providers.JsonRpcProvider(
-        "https://ethereum-sepolia-rpc.publicnode.com"
+        process.env.NEXT_PUBLIC_RPC_URL ||
+          "https://ethereum-sepolia-rpc.publicnode.com"
       );
       const pyusdContract = new ethers.Contract(
         CONTRACTS.PYUSD,
@@ -237,7 +238,7 @@ export default function PyLinksPaymentPage() {
           ],
           signer
         );
-        
+
         const pyLinksContract = new ethers.Contract(
           CONTRACTS.PYLINKS_CORE,
           ["function processPayment(uint256 paymentId)"],
@@ -282,10 +283,12 @@ export default function PyLinksPaymentPage() {
         );
         const pyusdReadContract = new ethers.Contract(
           PYUSD_ADDRESS,
-          ["function allowance(address owner, address spender) view returns (uint256)"],
+          [
+            "function allowance(address owner, address spender) view returns (uint256)",
+          ],
           readProvider
         );
-        
+
         const currentAllowance = await pyusdReadContract.allowance(
           user.wallet.address,
           CONTRACTS.PYLINKS_CORE
@@ -297,8 +300,8 @@ export default function PyLinksPaymentPage() {
           const approveData = new ethers.utils.Interface([
             "function approve(address spender, uint256 amount) returns (bool)",
           ]).encodeFunctionData("approve", [
-            CONTRACTS.PYLINKS_CORE, 
-            ethers.constants.MaxUint256 // Max approval to avoid future approvals
+            CONTRACTS.PYLINKS_CORE,
+            ethers.constants.MaxUint256, // Max approval to avoid future approvals
           ]);
 
           await sendTransaction(
@@ -522,7 +525,9 @@ export default function PyLinksPaymentPage() {
                     <Alert className="bg-blue-50 border-blue-200">
                       <Wallet className="h-4 w-4 text-blue-600" />
                       <AlertDescription className="text-blue-800">
-                        This payment will use your browser wallet (MetaMask). You may see 1-2 confirmation popups depending on your approval status.
+                        This payment will use your browser wallet (MetaMask).
+                        You may see 1-2 confirmation popups depending on your
+                        approval status.
                       </AlertDescription>
                     </Alert>
                   )}

@@ -2,18 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { 
-  Zap, 
-  Gift, 
-  Star, 
-  Trophy, 
+import {
+  Zap,
+  Gift,
+  Star,
+  Trophy,
   Target,
   Sparkles,
   Crown,
-  Medal
+  Medal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -25,7 +31,7 @@ import { toast } from "sonner";
 
 export default function Gamification() {
   const { user } = usePrivy();
-  const { getSpinCredits, getLoyaltyPoints } = usePyLinksCore();
+  const { getSpinCredits, getLoyaltyPoints, service } = usePyLinksCore();
   const { sendTransaction } = useSendTransaction();
   const [spinCredits, setSpinCredits] = useState("0");
   const [loyaltyPoints, setLoyaltyPoints] = useState("0");
@@ -39,20 +45,61 @@ export default function Gamification() {
   }, [user?.wallet?.address]);
 
   const loadGamificationData = async () => {
-    if (!user?.wallet?.address) return;
+    if (!user?.wallet?.address) {
+      console.log("No wallet address found");
+      return;
+    }
 
     try {
       setLoading(true);
+      console.log("Loading gamification data for wallet:", user.wallet.address);
+      console.log("Service available:", !!service);
+
+      // If service is not available, try direct contract call as fallback
+      if (!service) {
+        console.log("⚠️ Service not available, trying direct contract call...");
+
+        // Import PyLinksCore service directly
+        const { PyLinksCoreService } = await import(
+          "@/lib/contracts/pylinks-core"
+        );
+        const directService = new PyLinksCoreService(); // Read-only service
+
+        const [credits, points] = await Promise.all([
+          directService.getSpinCredits(user.wallet.address),
+          directService.getLoyaltyPoints(user.wallet.address),
+        ]);
+
+        console.log("✅ Direct contract call - Spin credits:", credits);
+        console.log("✅ Direct contract call - Loyalty points:", points);
+
+        setSpinCredits(credits);
+        setLoyaltyPoints(points);
+
+        toast.success(
+          `Loaded ${credits} spin credits and ${points} loyalty points (direct call)`
+        );
+        return;
+      }
+
+      // Use hook service if available
       const [credits, points] = await Promise.all([
         getSpinCredits(user.wallet.address),
-        getLoyaltyPoints(user.wallet.address)
+        getLoyaltyPoints(user.wallet.address),
       ]);
+
+      console.log("✅ Hook service - Spin credits:", credits);
+      console.log("✅ Hook service - Loyalty points:", points);
 
       setSpinCredits(credits);
       setLoyaltyPoints(points);
+
+      toast.success(
+        `Loaded ${credits} spin credits and ${points} loyalty points`
+      );
     } catch (error) {
-      console.error("Error loading gamification data:", error);
-      toast.error("Failed to load gamification data");
+      console.error("❌ Error loading gamification data:", error);
+      toast.error("Failed to load gamification data from contract");
     } finally {
       setLoading(false);
     }
@@ -70,7 +117,7 @@ export default function Gamification() {
     }
 
     setIsSpinning(true);
-    
+
     // Simulate spin animation
     setTimeout(async () => {
       const prizes = [
@@ -79,41 +126,51 @@ export default function Gamification() {
         { name: "1.0 PYUSD", amount: "1.0", type: "pyusd" },
         { name: "5 Loyalty Points", amount: "5", type: "points" },
         { name: "10 Loyalty Points", amount: "10", type: "points" },
-        { name: "Better luck next time!", amount: "0", type: "none" }
+        { name: "Better luck next time!", amount: "0", type: "none" },
       ];
-      
+
       const randomPrize = prizes[Math.floor(Math.random() * prizes.length)];
       setLastWin(randomPrize.name);
-      
+
       // Decrease spin credits (this would be handled by contract)
       const newCredits = Math.max(0, parseInt(spinCredits) - 1);
       setSpinCredits(newCredits.toString());
-      
+
       try {
         // If won PYUSD, send actual payment
-        if (randomPrize.type === "pyusd" && parseFloat(randomPrize.amount) > 0 && user.wallet?.address) {
+        if (
+          randomPrize.type === "pyusd" &&
+          parseFloat(randomPrize.amount) > 0 &&
+          user.wallet?.address
+        ) {
           // PYUSD transfer using Privy sendTransaction
           const PYUSD_ADDRESS = "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9";
           const amountWei = ethers.utils.parseUnits(randomPrize.amount, 6); // PYUSD has 6 decimals
-          
+
           const transferData = new ethers.utils.Interface([
-            "function transfer(address to, uint256 amount) returns (bool)"
+            "function transfer(address to, uint256 amount) returns (bool)",
           ]).encodeFunctionData("transfer", [user.wallet.address, amountWei]);
-          
-          const result = await sendTransaction({
-            to: PYUSD_ADDRESS,
-            data: transferData
-          }, {
-            uiOptions: {
-              showWalletUIs: false // No popup modals
+
+          const result = await sendTransaction(
+            {
+              to: PYUSD_ADDRESS,
+              data: transferData,
+            },
+            {
+              uiOptions: {
+                showWalletUIs: false, // No popup modals
+              },
             }
-          });
-          
+          );
+
           setLastWinTxHash(result.hash);
-          toast.success(`🎉 You won ${randomPrize.name}! Payment sent to your wallet.`);
+          toast.success(
+            `🎉 You won ${randomPrize.name}! Payment sent to your wallet.`
+          );
         } else if (randomPrize.type === "points") {
           // Update loyalty points (would be handled by contract)
-          const newPoints = parseInt(loyaltyPoints) + parseInt(randomPrize.amount);
+          const newPoints =
+            parseInt(loyaltyPoints) + parseInt(randomPrize.amount);
           setLoyaltyPoints(newPoints.toString());
           toast.success(`🎉 You won ${randomPrize.name}!`);
         } else {
@@ -123,23 +180,41 @@ export default function Gamification() {
         console.error("Prize distribution error:", error);
         toast.error("Failed to distribute prize. Please try again.");
       }
-      
+
       setIsSpinning(false);
     }, 3000);
   };
 
   const getLoyaltyTier = (points: number) => {
-    if (points >= 10000) return { name: "Diamond", icon: Crown, color: "text-blue-600" };
-    if (points >= 5000) return { name: "Gold", icon: Trophy, color: "text-yellow-600" };
-    if (points >= 1000) return { name: "Silver", icon: Medal, color: "text-gray-600" };
+    if (points >= 10000)
+      return { name: "Diamond", icon: Crown, color: "text-blue-600" };
+    if (points >= 5000)
+      return { name: "Gold", icon: Trophy, color: "text-yellow-600" };
+    if (points >= 1000)
+      return { name: "Silver", icon: Medal, color: "text-gray-600" };
     return { name: "Bronze", icon: Star, color: "text-amber-600" };
   };
 
   const getNextTierProgress = (points: number) => {
-    if (points >= 10000) return { progress: 100, nextTier: "Max Level", pointsNeeded: 0 };
-    if (points >= 5000) return { progress: ((points - 5000) / 5000) * 100, nextTier: "Diamond", pointsNeeded: 10000 - points };
-    if (points >= 1000) return { progress: ((points - 1000) / 4000) * 100, nextTier: "Gold", pointsNeeded: 5000 - points };
-    return { progress: (points / 1000) * 100, nextTier: "Silver", pointsNeeded: 1000 - points };
+    if (points >= 10000)
+      return { progress: 100, nextTier: "Max Level", pointsNeeded: 0 };
+    if (points >= 5000)
+      return {
+        progress: ((points - 5000) / 5000) * 100,
+        nextTier: "Diamond",
+        pointsNeeded: 10000 - points,
+      };
+    if (points >= 1000)
+      return {
+        progress: ((points - 1000) / 4000) * 100,
+        nextTier: "Gold",
+        pointsNeeded: 5000 - points,
+      };
+    return {
+      progress: (points / 1000) * 100,
+      nextTier: "Silver",
+      pointsNeeded: 1000 - points,
+    };
   };
 
   if (loading) {
@@ -172,8 +247,8 @@ export default function Gamification() {
       <Alert>
         <Sparkles className="h-4 w-4" />
         <AlertDescription>
-          Earn 1 spin credit for every $1 in payments processed. Spin to win PYUSD rewards, 
-          loyalty points, and unlock exclusive merchant benefits!
+          Earn 1 spin credit for every $1 in payments processed. Spin to win
+          PYUSD rewards, loyalty points, and unlock exclusive merchant benefits!
         </AlertDescription>
       </Alert>
 
@@ -192,13 +267,19 @@ export default function Gamification() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex justify-center">
-                <div className={`relative w-64 h-64 rounded-full border-8 border-primary ${isSpinning ? 'animate-spin' : ''}`}>
+                <div
+                  className={`relative w-64 h-64 rounded-full border-8 border-primary ${
+                    isSpinning ? "animate-spin" : ""
+                  }`}
+                >
                   <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center">
                     <div className="w-48 h-48 rounded-full bg-white flex items-center justify-center">
                       <div className="text-center">
                         <Zap className="h-12 w-12 mx-auto mb-2 text-primary" />
                         <p className="font-bold text-lg">PyLinks</p>
-                        <p className="text-sm text-muted-foreground">Spin & Win</p>
+                        <p className="text-sm text-muted-foreground">
+                          Spin & Win
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -212,9 +293,42 @@ export default function Gamification() {
               <div className="text-center space-y-4">
                 <div className="flex items-center justify-center gap-4">
                   <div className="text-center">
-                    <p className="text-2xl font-bold">{spinCredits}</p>
-                    <p className="text-sm text-muted-foreground">Spin Credits</p>
+                    <p className="text-2xl font-bold">
+                      {loading ? "Loading..." : spinCredits}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Spin Credits
+                    </p>
                   </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">
+                      {loading ? "Loading..." : loyaltyPoints}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Loyalty Points
+                    </p>
+                  </div>
+                </div>
+
+                {/* Debug Info */}
+                <div className="text-xs text-muted-foreground text-center space-y-1">
+                  <p>
+                    Wallet:{" "}
+                    {user?.wallet?.address
+                      ? `${user.wallet.address.slice(
+                          0,
+                          6
+                        )}...${user.wallet.address.slice(-4)}`
+                      : "Not connected"}
+                  </p>
+                  <Button
+                    onClick={loadGamificationData}
+                    variant="outline"
+                    size="sm"
+                    disabled={loading}
+                  >
+                    {loading ? "Loading..." : "Refresh Data"}
+                  </Button>
                 </div>
 
                 <Button
@@ -238,13 +352,18 @@ export default function Gamification() {
 
                 {lastWin && (
                   <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
-                    <p className="text-green-800 font-medium">Last Win: {lastWin}</p>
+                    <p className="text-green-800 font-medium">
+                      Last Win: {lastWin}
+                    </p>
                     {lastWinTxHash && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-green-700">Transaction:</span>
+                        <span className="text-sm text-green-700">
+                          Transaction:
+                        </span>
                         <div className="flex items-center gap-2">
                           <code className="text-xs bg-white px-2 py-1 rounded border">
-                            {lastWinTxHash.slice(0, 10)}...{lastWinTxHash.slice(-8)}
+                            {lastWinTxHash.slice(0, 10)}...
+                            {lastWinTxHash.slice(-8)}
                           </code>
                           <Button
                             size="sm"
@@ -274,7 +393,10 @@ export default function Gamification() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-center">
-                <Badge variant="outline" className={`${tier.color} text-lg px-3 py-1`}>
+                <Badge
+                  variant="outline"
+                  className={`${tier.color} text-lg px-3 py-1`}
+                >
                   <tier.icon className="h-4 w-4 mr-1" />
                   {tier.name}
                 </Badge>
@@ -340,21 +462,27 @@ export default function Gamification() {
                   <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                   <div>
                     <p className="font-medium">Process Payments</p>
-                    <p className="text-muted-foreground">1 credit per $1 processed</p>
+                    <p className="text-muted-foreground">
+                      1 credit per $1 processed
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                   <div>
                     <p className="font-medium">Refer Users</p>
-                    <p className="text-muted-foreground">Bonus credits for referrals</p>
+                    <p className="text-muted-foreground">
+                      Bonus credits for referrals
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                   <div>
                     <p className="font-medium">Daily Login</p>
-                    <p className="text-muted-foreground">Free credits for active users</p>
+                    <p className="text-muted-foreground">
+                      Free credits for active users
+                    </p>
                   </div>
                 </div>
               </div>
@@ -389,7 +517,9 @@ export default function Gamification() {
               <div className="text-center space-y-2">
                 <Medal className="h-8 w-8 mx-auto text-gray-600" />
                 <h3 className="font-semibold">Silver</h3>
-                <p className="text-xs text-muted-foreground">1,000 - 4,999 points</p>
+                <p className="text-xs text-muted-foreground">
+                  1,000 - 4,999 points
+                </p>
                 <ul className="text-xs space-y-1">
                   <li>• 10% bonus rewards</li>
                   <li>• Priority support</li>
@@ -401,7 +531,9 @@ export default function Gamification() {
               <div className="text-center space-y-2">
                 <Trophy className="h-8 w-8 mx-auto text-yellow-600" />
                 <h3 className="font-semibold">Gold</h3>
-                <p className="text-xs text-muted-foreground">5,000 - 9,999 points</p>
+                <p className="text-xs text-muted-foreground">
+                  5,000 - 9,999 points
+                </p>
                 <ul className="text-xs space-y-1">
                   <li>• 25% bonus rewards</li>
                   <li>• Exclusive prizes</li>

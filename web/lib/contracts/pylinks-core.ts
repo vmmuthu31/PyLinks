@@ -176,16 +176,33 @@ export class PyLinksCoreService {
     sessionId: string
   ): Promise<PaymentDetails | null> {
     try {
+      console.log("🔍 Contract: Getting payment for session:", sessionId);
+      console.log("📄 Contract address:", this.contract.address);
+      console.log("🌐 Provider:", (this.contract.provider as any).connection?.url || "unknown");
+      
       // Get payment ID from session mapping
       const paymentId = await this.contract.sessionToPayment(sessionId);
+      console.log("🔢 Raw payment ID from contract:", paymentId.toString());
 
       if (paymentId.isZero()) {
+        console.log("❌ Payment ID is zero - session not found");
         return null;
       }
 
-      return await this.getPayment(paymentId.toNumber());
-    } catch (error) {
-      console.error("Error fetching payment by session:", error);
+      const numericPaymentId = paymentId.toNumber();
+      console.log("🔢 Numeric payment ID:", numericPaymentId);
+      
+      const payment = await this.getPayment(numericPaymentId);
+      console.log("📋 Payment details:", payment);
+      
+      return payment;
+    } catch (error: any) {
+      console.error("❌ Error fetching payment by session:", error);
+      console.error("❌ Error details:", {
+        message: error.message,
+        code: error.code,
+        data: error.data
+      });
       return null;
     }
   }
@@ -557,16 +574,26 @@ export class PyLinksCoreService {
    * Get user's spin credits
    */
   async getSpinCredits(user: string): Promise<string> {
-    const credits = await this.contract.spinCredits(user);
-    return credits.toString();
+    try {
+      const credits = await this.contract.spinCredits(user);
+      return credits.toString();
+    } catch (error) {
+      console.error('Error getting spin credits:', error);
+      return '0';
+    }
   }
 
   /**
    * Get user's loyalty points
    */
   async getLoyaltyPoints(user: string): Promise<string> {
-    const points = await this.contract.loyaltyPoints(user);
-    return points.toString();
+    try {
+      const points = await this.contract.loyaltyPoints(user);
+      return points.toString();
+    } catch (error) {
+      console.error('Error getting loyalty points:', error);
+      return '0';
+    }
   }
 
   /**
